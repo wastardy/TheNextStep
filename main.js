@@ -123,7 +123,7 @@ const main = () => {
 
                 await bot.sendMessage(
                     chatId, 
-                    `Now enter the search range in meters` +
+                    `Now enter the search range between 50 and 5000 meters` +
                     `\n(Default is ${defaultRange} meters)`
                 );
 
@@ -138,27 +138,40 @@ const main = () => {
 
             let range = parseFloat(text);
 
-            if (isNaN(range) || range <= 0) {
-                range = defaultRange;
+            // if (isNaN(range) || range <= 0) {
+            //     range = defaultRange;
+            //     await bot.sendMessage(
+            //         chatId, 
+            //         `Invalid range value. <b>Set to default: ${defaultRange} m.</b>`, 
+            //         { parse_mode: "HTML"}
+            //     );
+            // }
+
+            const isValidRange = await isValidRangeInput(range);
+
+            if (!isValidRange) {
+                // await sendRangeSelectionButtons(chatId);
                 await bot.sendMessage(
                     chatId, 
-                    `Invalid range value. <b>Set to default: ${defaultRange} m.</b>`, 
-                    { parse_mode: "HTML"}
+                    `Invalid range. Please enter a number between 50 and 5000 meters.`,
+                    { parse_mode: "HTML" }
                 );
+                return;
             }
+            else {
+                console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId], `\n\n`);
 
-            console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId], `\n\n`);
+                await bot.sendMessage(
+                    chatId, 
+                    `Searching ${selectedCategory}'s around <b>'${location}'</b> within a <b>${range} m</b> radius... 🔍`,
+                    { parse_mode: "HTML"}    
+                );
 
-            await bot.sendMessage(
-                chatId, 
-                `Searching ${selectedCategory}'s around <b>'${location}'</b> within a <b>${range} m</b> radius... 🔍`,
-                { parse_mode: "HTML"}    
-            );
+                await searchCafesByAddress(location, range);
+                await sendCafeButtons(chatId);
 
-            await searchCafesByAddress(location, range);
-            await sendCafeButtons(chatId);
-
-            resetUserState(chatId);
+                resetUserState(chatId);
+            }
         }
         else {
             initialChoice(chatId);
@@ -222,8 +235,14 @@ async function isValidStreetInput(city, street) {
     }
 }
 
+async function isValidRangeInput(range) {
+    const rangePattern = /^[0-9]+$/;
+    return rangePattern.test(range) && range >= 50 && range <= 5000; 
+}
+
 // --------> functions
 
+// #region buttons
 async function sendCafeButtons(chatId) {
     try {
         const cafes = await getCafesFromDB();
@@ -247,6 +266,17 @@ async function sendCafeButtons(chatId) {
     }
 }
 
+async function sendRangeSelectionButtons(chatId) {
+    await bot.sendMessage(chatId, 'Incorrectly entered range\nSelect the appropriate action', {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: 'Set default range (1000 m)', callback_data: 'set_default_range' }],
+                [{ text: 'Enter search range again', callback_data: 'enter_range_again'}]
+            ]
+        }
+    });
+}
+// #endregion
 
 async function getCoordinates(address) {
     const geocodeUrl = 'https://maps.googleapis.com/maps/api/geocode/json';
@@ -383,14 +413,6 @@ async function sendMapLink(cafe, chatId) {
         { parse_mode: 'Markdown' }
     );  
 }
-
-// Виклик функції з прикладними даними
-// const userAddress = 'Куліша 28 Борислав'; // Адреса користувача
-// const searchRadius = 1500; // Радіус пошуку (2 км)
-  
-// searchCafesByAddress(userAddress, searchRadius);
-// console.log("Кафе з БД: ");
-// getCafesFromDB();
 
 const initialChoice = async (chatId) => {
     const options = {
