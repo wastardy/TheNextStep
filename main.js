@@ -138,25 +138,11 @@ const main = () => {
 
             let range = parseFloat(text);
 
-            // if (isNaN(range) || range <= 0) {
-            //     range = defaultRange;
-            //     await bot.sendMessage(
-            //         chatId, 
-            //         `Invalid range value. <b>Set to default: ${defaultRange} m.</b>`, 
-            //         { parse_mode: "HTML"}
-            //     );
-            // }
-
             const isValidRange = await isValidRangeInput(range);
 
             if (!isValidRange) {
-                // await sendRangeSelectionButtons(chatId);
-                await bot.sendMessage(
-                    chatId, 
-                    `Invalid range. Please enter a number between 50 and 5000 meters.`,
-                    { parse_mode: "HTML" }
-                );
-                return;
+                await bot.sendMessage(chatId, 'Incorrectly entered range');
+                await sendRangeSelectionButtons(chatId);
             }
             else {
                 console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId], `\n\n`);
@@ -179,24 +165,17 @@ const main = () => {
     });
 
     bot.on('callback_query', async (callbackQuery) => {
-        const cafeId = callbackQuery.data;
+        const callbackData = callbackQuery.data;
         const chatId = callbackQuery.message.chat.id;
     
-        try {
-            const cafe = await getCafeById(cafeId);
-    
-            if (cafe) {
-                sendCafeInfo(cafe, chatId);
-                // sendMapImageUrl(cafe, chatId);
-                sendMapLink(cafe, chatId); 
-            } 
-            else {
-                await bot.sendMessage(chatId, 'Cafe not found 😶');
-            }
-        } 
-        catch (error) {
-            console.error('========> Error fetching cafe details: ', error.message);
-            bot.sendMessage(chatId, 'Error fetching cafe details.');
+        if (callbackData === 'set_default_range') {
+            await handleSetDefaultRange(chatId, userSteps);
+        }
+        else if (callbackData === 'enter_range_again') {
+            await handleEnterRangeAgain(chatId);
+        }
+        else {
+            await handleCafeSelection(chatId, callbackData);
         }
     });
 };
@@ -205,7 +184,7 @@ main();
 
 
 
-// --------> validations
+// #region validations
 async function isValidCityInput(city) {
     const cityPattern = /^[a-zA-Z\u0400-\u04FF]+(?:[ -][a-zA-Z\u0400-\u04FF]+)*$/;
     return cityPattern.test(city);
@@ -239,8 +218,7 @@ async function isValidRangeInput(range) {
     const rangePattern = /^[0-9]+$/;
     return rangePattern.test(range) && range >= 50 && range <= 5000; 
 }
-
-// --------> functions
+// #endregion
 
 // #region buttons
 async function sendCafeButtons(chatId) {
@@ -261,13 +239,13 @@ async function sendCafeButtons(chatId) {
         });
     }
     catch (error) {
-        console.error('--> Error retrieving cafe from database: ', error.message);
+        console.error('========> Error retrieving cafe from database: ', error.message);
         bot.sendMessage(chatId, 'Error retrieving cafe from database');
     }
 }
 
 async function sendRangeSelectionButtons(chatId) {
-    await bot.sendMessage(chatId, 'Incorrectly entered range\nSelect the appropriate action', {
+    await bot.sendMessage(chatId, 'Select the appropriate action:', {
         reply_markup: {
             inline_keyboard: [
                 [{ text: 'Set default range (1000 m)', callback_data: 'set_default_range' }],
@@ -275,6 +253,60 @@ async function sendRangeSelectionButtons(chatId) {
             ]
         }
     });
+}
+// #endregion
+
+// #region callback_handlers
+async function handleEnterRangeAgain(chatId) {
+    await bot.sendMessage(
+        chatId,
+        'Please enter a search range between 50 and 5000 meters'
+    );
+}
+
+async function handleSetDefaultRange(chatId, userSteps) {
+    userSteps[chatId].range = defaultRange;
+
+    await bot.sendMessage(
+        chatId,
+        `Range set to default: <b>${defaultRange} meters</b>`,
+        { parse_mode: "HTML"}
+    );
+
+    console.log('======> користувач містить: ', userSteps[chatId]);
+    
+    const location = userSteps[chatId].location;
+    const range = userSteps[chatId].range;
+
+    await bot.sendMessage(
+        chatId, 
+        `Searching ${selectedCategory}'s around <b>'${location}'</b> within a <b>${range} m</b> radius... 🔍`,
+        { parse_mode: "HTML"}    
+    );
+
+    await searchCafesByAddress(location, range);
+    await sendCafeButtons(chatId);
+
+    resetUserState(chatId);
+}
+
+async function handleCafeSelection(chatId, cafeId) {
+    try {
+        const cafe = await getCafeById(cafeId);
+
+        if (cafe) {
+            await sendCafeInfo(cafe, chatId);
+            // await sendMapImageUrl(cafe, chatId);
+            await sendMapLink(cafe, chatId); 
+        } 
+        else {
+            await bot.sendMessage(chatId, 'Cafe not found 😶');
+        }
+    } 
+    catch (error) {
+        console.error('========> Error fetching cafe details: ', error.message);
+        bot.sendMessage(chatId, 'Error fetching cafe details.');
+    }
 }
 // #endregion
 
@@ -299,7 +331,7 @@ async function getCoordinates(address) {
         }
     }
     catch (error) {
-        console.error('--> Geocoding API Error: ', error.message);
+        console.error('========> Geocoding API Error: ', error.message);
         return null;
     }
 }
@@ -334,7 +366,7 @@ async function findCafes(latitude, longitude, radius) {
         }
     }
     catch (error) {
-        console.error('Places API Error: ', error.message);
+        console.error('========> Places API Error: ', error.message);
     }
 }
 
@@ -353,7 +385,7 @@ async function saveCafesToDB(cafes) {
         console.log('Cafes successfully saved to dynamic_cafes table');
     }
     catch (error) {
-        console.error('Error saving cafe to database: ', error.message);
+        console.error('========> Error saving cafe to database: ', error.message);
     }
 }
 
@@ -377,7 +409,7 @@ async function getCafeById(cafeId) {
         return cafe;
     }
     catch (error) {
-        console.error('Error getting cafe: ', error.message);
+        console.error('========> Error getting cafe: ', error.message);
         return null;
     }
 }
