@@ -37,31 +37,63 @@ const main = () => {
         
         if (text === `/start`) return; 
 
+        // place types from places api:
+        // gym, night_club, museum, park, restaurant, spa, ~florist, movie_theater
         if (text && ['cafe', 'sport', 'park', 'culture'].includes(text.toLowerCase())) {
             selectedCategory = text;
-            userSteps[chatId] = 'waiting_for_location'; 
+            userSteps[chatId] = 'waiting_for_city'; 
+            
             await bot.sendMessage(
                 chatId, 
                 `You chose ${selectedCategory}.` + 
-                `\nPlease enter your location 📌` + 
-                `\n(e.g. Шевченка 13 Київ)`
+                `\nPlease enter your city 📌` + 
+                `\n(e.g. Київ)`
             );
         }
-        else if (userSteps[chatId] === 'waiting_for_location') {
+        else if (userSteps[chatId] === 'waiting_for_city') {
+            console.log('========> Введене місто: ', text);
+
             userSteps[chatId] = {
-                step: 'waiting_for_range',
-                location: text
+                step: 'waiting_for_street',
+                city: text
             };
+
             await bot.sendMessage(
                 chatId, 
-                `Now enter the search range in m` +
-                `\n(Default is ${defaultRange} m)`
+                `Now enter your street with number 📌` +
+                `\n(e.g. Шевченка 13)`
             );
-            console.log(text);
+
+            console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId]);
+        }
+        else if (userSteps[chatId]?.step === 'waiting_for_street') {
+            console.log('\n\n========> Введена вулиця: ', text);
+
+            let city = userSteps[chatId].city;
+            let street = text;
+
+            let address = `${city} ${street}`;
+
+            userSteps[chatId] = {
+                ...userSteps[chatId], // to save field city
+                step: 'waiting_for_range',
+                location: address
+            };
+
+            await bot.sendMessage(
+                chatId, 
+                `Now enter the search range in meters` +
+                `\n(Default is ${defaultRange} meters)`
+            );
+
+            console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId]);
         }
         else if (userSteps[chatId]?.step === 'waiting_for_range') {
             const location = userSteps[chatId].location;
             
+            console.log('\n\n========> Загальна локація користувача: ', location);
+            console.log('========> Введений діапазон пошуку: ', text);
+
             let range = parseFloat(text);
 
             if (isNaN(range) || range <= 0) {
@@ -72,8 +104,6 @@ const main = () => {
                     { parse_mode: "HTML"}
                 );
             }
-            
-            console.log(text);
 
             await bot.sendMessage(
                 chatId, 
@@ -81,6 +111,8 @@ const main = () => {
                 { parse_mode: "HTML"}    
             );
             
+            console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId], `\n\n`);
+
             await searchCafesByAddress(location, range);
             await sendCafeButtons(chatId);
 
