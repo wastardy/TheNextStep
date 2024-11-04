@@ -47,24 +47,43 @@ const main = () => {
                 chatId, 
                 `You chose ${selectedCategory}.` + 
                 `\nPlease enter your city 📌` + 
-                `\n(e.g. Київ)`
+                `\n(e.g. Київ, San Francisco, абу-дабі)`
             );
         }
         else if (userSteps[chatId] === 'waiting_for_city') {
-            console.log('========> Введене місто: ', text);
+            console.log('\n========> Введене місто: ', text);
 
-            userSteps[chatId] = {
-                step: 'waiting_for_street',
-                city: text
-            };
+            if (!isValidCityInput(text)) {
+                console.log('========> Обробка випадку з неправильним вводом міста..')
+                await bot.sendMessage(
+                    chatId,
+                    `Invalid city name🥲` + 
+                    `\n\nPlease enter a valid city name without` + 
+                    `\n- numbers\n- extra spaces\n- multiple hyphens\n- etc`
+                );
 
-            await bot.sendMessage(
-                chatId, 
-                `Now enter your street with number 📌` +
-                `\n(e.g. Шевченка 13)`
-            );
+                await bot.sendMessage(
+                    chatId,  
+                    `\nPlease enter your city 📌` + 
+                    `\n(e.g. Київ, San Francisco, абу-дабі)`
+                );
+            }
+            else {
+                console.log('\n========> Введене ЗАНОВО місто: ', text);
 
-            console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId]);
+                userSteps[chatId] = {
+                    step: 'waiting_for_street',
+                    city: text
+                };
+    
+                await bot.sendMessage(
+                    chatId, 
+                    `Now enter your street with number 📌` +
+                    `\n(e.g. Шевченка 13)`
+                );
+
+                console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId]);
+            }
         }
         else if (userSteps[chatId]?.step === 'waiting_for_street') {
             console.log('\n\n========> Введена вулиця: ', text);
@@ -149,6 +168,12 @@ const main = () => {
 main();
 
 
+
+// --------> validations
+function isValidCityInput(city) {
+    const cityPattern = /^[a-zA-Z\u0400-\u04FF]+(?:[ -][a-zA-Z\u0400-\u04FF]+)*$/;
+    return cityPattern.test(city);
+}
 
 
 // --------> functions
