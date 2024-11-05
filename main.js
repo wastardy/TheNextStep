@@ -13,6 +13,7 @@ const bot = new telegramAPI(token, { polling: true });
 // --------------------------------------------------
 
 const userSteps = {};
+const userLastCommand = {};
 const defaultRange = 1000; 
 let selectedCategory = '';
 
@@ -25,9 +26,7 @@ const main = () => {
     bot.onText(/\/start/, (msg) => {
         const chatId = msg.chat.id;
         
-        // if (userLastCommand[chatId] === '/open_website') {
-        //     return;
-        // }
+        userLastCommand[chatId] = '/start';
         
         resetUserState(chatId);
         userSteps[chatId] = 'choosing_category';
@@ -37,6 +36,8 @@ const main = () => {
 
     bot.onText(/\/open_website/, (msg) => {
         const chatId = msg.chat.id;
+
+        userLastCommand[chatId] = '/open_website';
 
         bot.sendMessage(chatId, 'Follow the link below to open the web page:', {
             reply_markup: {
@@ -58,6 +59,8 @@ const main = () => {
         
         if (text === `/start`) return; 
 
+        if (userLastCommand[chatId] === '/open_website') return;
+
         // place types from places api:
         // gym, night_club, museum, park, restaurant, spa, ~florist, movie_theater
         if (text && ['cafe', 'sport', 'park', 'culture'].includes(text.toLowerCase())) {
@@ -74,6 +77,8 @@ const main = () => {
         // перевірка на введення міста і продовження введення вулиці
         else if (userSteps[chatId] === 'waiting_for_city') {
             console.log('\n========> Введене місто: ', text);
+
+            if (text === '/open_website') return;
 
             const isValidCity = await isValidCityInput(text);
 
@@ -116,6 +121,8 @@ const main = () => {
 
             let city = userSteps[chatId].city;
             let street = text;
+
+            if (street === '/open_website') return;
 
             const isValidStreet = await isValidStreetInput(city, street);
 
@@ -161,6 +168,8 @@ const main = () => {
 
             let range = parseFloat(text);
 
+            if (range === '/open_website') return;
+
             const isValidRange = await isValidRangeInput(range);
 
             if (!isValidRange) {
@@ -183,6 +192,8 @@ const main = () => {
             }
         }
         else {
+            if (userLastCommand[chatId] === '/open_website') return;
+
             initialChoice(chatId);
         }
     });
