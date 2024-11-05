@@ -54,7 +54,9 @@ const main = () => {
         else if (userSteps[chatId] === 'waiting_for_city') {
             console.log('\n========> Введене місто: ', text);
 
-            if (!isValidCityInput(text)) {
+            const isValidCity = await isValidCityInput(text);
+
+            if (!isValidCity) {
                 console.log('========> Обробка випадку з неправильним вводом міста..')
                 
                 await bot.sendMessage(
