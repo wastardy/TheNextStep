@@ -37,54 +37,127 @@ const main = () => {
         
         if (text === `/start`) return; 
 
+        // place types from places api:
+        // gym, night_club, museum, park, restaurant, spa, ~florist, movie_theater
         if (text && ['cafe', 'sport', 'park', 'culture'].includes(text.toLowerCase())) {
             selectedCategory = text;
-            userSteps[chatId] = 'waiting_for_location'; 
+            userSteps[chatId] = 'waiting_for_city'; 
+            
             await bot.sendMessage(
                 chatId, 
                 `You chose ${selectedCategory}.` + 
-                `\nPlease enter your location 📌` + 
-                `\n(e.g. Шевченка 13 Київ)`
+                `\nPlease enter your city 📌` + 
+                `\n(e.g. Київ, San Francisco, абу-дабі)`
             );
         }
-        else if (userSteps[chatId] === 'waiting_for_location') {
-            userSteps[chatId] = {
-                step: 'waiting_for_range',
-                location: text
-            };
-            await bot.sendMessage(
-                chatId, 
-                `Now enter the search range in m` +
-                `\n(Default is ${defaultRange} m)`
-            );
-            console.log(text);
+        // перевірка на введення міста і продовження введення вулиці
+        else if (userSteps[chatId] === 'waiting_for_city') {
+            console.log('\n========> Введене місто: ', text);
+
+            if (!isValidCityInput(text)) {
+                console.log('========> Обробка випадку з неправильним вводом міста..')
+                
+                await bot.sendMessage(
+                    chatId,
+                    `Invalid city name🥲` + 
+                    `\n\nPlease enter a valid city name without` + 
+                    `\n- numbers\n- extra spaces\n- multiple hyphens\n- etc`
+                );
+
+                await bot.sendMessage(
+                    chatId,  
+                    `\nPlease enter your city 📌` + 
+                    `\n(e.g. Київ, San Francisco, абу-дабі)`
+                );
+            }
+            else {
+                console.log('\n========> Прийнятий ввід міста: ', text);
+
+                userSteps[chatId] = {
+                    step: 'waiting_for_street',
+                    city: text
+                };
+    
+                await bot.sendMessage(
+                    chatId, 
+                    `Now enter your street with number 📌` +
+                    `\n(e.g. 3 Abbey Rd., Шевченка 7)`
+                );
+
+                console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId]);
+            }
+        }
+        // перевірка на введення вулиці і введення діапазону пошуку
+        else if (userSteps[chatId]?.step === 'waiting_for_street') {
+            console.log('\n\n========> Введена вулиця: ', text);
+
+            let city = userSteps[chatId].city;
+            let street = text;
+
+            const isValidStreet = await isValidStreetInput(city, street);
+
+            if (!isValidStreet) {
+                console.log('========> Обробка випадку з неправильним вводом вулиці..')
+
+                await bot.sendMessage(
+                    chatId,
+                    `Street ${street} not found in ${city}` + 
+                    `Please enter a valid street😌`
+                );
+
+                await bot.sendMessage(
+                    chatId, 
+                    `Enter your street with number 📌` +
+                    `\n(e.g. 3 Abbey Rd., Шевченка 7)`
+                );
+            }
+            else {
+                console.log('\n========> Прийнятий ввід вулиці: ', text);
+                let address = `${city} ${street}`;
+
+                userSteps[chatId] = {
+                    ...userSteps[chatId], // to save field city
+                    step: 'waiting_for_range',
+                    location: address
+                };
+
+                await bot.sendMessage(
+                    chatId, 
+                    `Now enter the search range between 50 and 5000 meters` +
+                    `\n(Default is ${defaultRange} meters)`
+                );
+
+                console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId]);
+            }
         }
         else if (userSteps[chatId]?.step === 'waiting_for_range') {
             const location = userSteps[chatId].location;
             
+            console.log('\n\n========> Загальна локація користувача: ', location);
+            console.log('========> Введений діапазон пошуку: ', text);
+
             let range = parseFloat(text);
 
-            if (isNaN(range) || range <= 0) {
-                range = defaultRange;
+            const isValidRange = await isValidRangeInput(range);
+
+            if (!isValidRange) {
+                await bot.sendMessage(chatId, 'Incorrectly entered range');
+                await sendRangeSelectionButtons(chatId);
+            }
+            else {
+                console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId], `\n\n`);
+
                 await bot.sendMessage(
                     chatId, 
-                    `Invalid range value. <b>Set to default: ${defaultRange} m.</b>`, 
-                    { parse_mode: "HTML"}
+                    `Searching ${selectedCategory}'s around <b>'${location}'</b> within a <b>${range} m</b> radius... 🔍`,
+                    { parse_mode: "HTML"}    
                 );
+
+                await searchCafesByAddress(location, range);
+                await sendCafeButtons(chatId);
+
+                resetUserState(chatId);
             }
-            
-            console.log(text);
-
-            await bot.sendMessage(
-                chatId, 
-                `Searching ${selectedCategory}'s around <b>'${location}'</b> within a <b>${range} m</b> radius... 🔍`,
-                { parse_mode: "HTML"}    
-            );
-            
-            await searchCafesByAddress(location, range);
-            await sendCafeButtons(chatId);
-
-            resetUserState(chatId);
         }
         else {
             initialChoice(chatId);
@@ -92,24 +165,17 @@ const main = () => {
     });
 
     bot.on('callback_query', async (callbackQuery) => {
-        const cafeId = callbackQuery.data;
+        const callbackData = callbackQuery.data;
         const chatId = callbackQuery.message.chat.id;
     
-        try {
-            const cafe = await getCafeById(cafeId);
-    
-            if (cafe) {
-                sendCafeInfo(cafe, chatId);
-                // sendMapImageUrl(cafe, chatId);
-                sendMapLink(cafe, chatId); 
-            } 
-            else {
-                await bot.sendMessage(chatId, 'Cafe not found 😶');
-            }
-        } 
-        catch (error) {
-            console.error('--> Error fetching cafe details: ', error.message);
-            bot.sendMessage(chatId, 'Error fetching cafe details.');
+        if (callbackData === 'set_default_range') {
+            await handleSetDefaultRange(chatId, userSteps);
+        }
+        else if (callbackData === 'enter_range_again') {
+            await handleEnterRangeAgain(chatId);
+        }
+        else {
+            await handleCafeSelection(chatId, callbackData);
         }
     });
 };
@@ -118,9 +184,43 @@ main();
 
 
 
+// #region validations
+async function isValidCityInput(city) {
+    const cityPattern = /^[a-zA-Z\u0400-\u04FF]+(?:[ -][a-zA-Z\u0400-\u04FF]+)*$/;
+    return cityPattern.test(city);
+}
 
-// --------> functions
+async function isValidStreetInput(city, street) {
+    const address = `${street}, ${city}`;
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GOOGLE_API_KEY}`;
 
+    try {
+        // За допомогою axios.get відправляється запит до API, який передає сформовану адресу.
+        const response = await axios.get(url);
+
+        if (response.data.status === 'OK') {
+            const result = response.data.results[0];
+            console.log('========> Address found: ', result.formatted_address);
+            return true;
+        } 
+        else if (response.data.status === 'ZERO_RESULTS') {
+            console.log('========> Address not found');
+            return false;
+        }
+    } 
+    catch (error) {
+        console.error('========> Error with Geocoding API:', error);
+        return false;
+    }
+}
+
+async function isValidRangeInput(range) {
+    const rangePattern = /^[0-9]+$/;
+    return rangePattern.test(range) && range >= 50 && range <= 5000; 
+}
+// #endregion
+
+// #region buttons
 async function sendCafeButtons(chatId) {
     try {
         const cafes = await getCafesFromDB();
@@ -139,11 +239,76 @@ async function sendCafeButtons(chatId) {
         });
     }
     catch (error) {
-        console.error('--> Error retrieving cafe from database: ', error.message);
+        console.error('========> Error retrieving cafe from database: ', error.message);
         bot.sendMessage(chatId, 'Error retrieving cafe from database');
     }
 }
 
+async function sendRangeSelectionButtons(chatId) {
+    await bot.sendMessage(chatId, 'Select the appropriate action:', {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: 'Set default range (1000 m)', callback_data: 'set_default_range' }],
+                [{ text: 'Enter search range again', callback_data: 'enter_range_again'}]
+            ]
+        }
+    });
+}
+// #endregion
+
+// #region callback_handlers
+async function handleEnterRangeAgain(chatId) {
+    await bot.sendMessage(
+        chatId,
+        'Please enter a search range between 50 and 5000 meters'
+    );
+}
+
+async function handleSetDefaultRange(chatId, userSteps) {
+    userSteps[chatId].range = defaultRange;
+
+    await bot.sendMessage(
+        chatId,
+        `Range set to default: <b>${defaultRange} meters</b>`,
+        { parse_mode: "HTML"}
+    );
+
+    console.log('======> користувач містить: ', userSteps[chatId]);
+    
+    const location = userSteps[chatId].location;
+    const range = userSteps[chatId].range;
+
+    await bot.sendMessage(
+        chatId, 
+        `Searching ${selectedCategory}'s around <b>'${location}'</b> within a <b>${range} m</b> radius... 🔍`,
+        { parse_mode: "HTML"}    
+    );
+
+    await searchCafesByAddress(location, range);
+    await sendCafeButtons(chatId);
+
+    resetUserState(chatId);
+}
+
+async function handleCafeSelection(chatId, cafeId) {
+    try {
+        const cafe = await getCafeById(cafeId);
+
+        if (cafe) {
+            await sendCafeInfo(cafe, chatId);
+            // await sendMapImageUrl(cafe, chatId);
+            await sendMapLink(cafe, chatId); 
+        } 
+        else {
+            await bot.sendMessage(chatId, 'Cafe not found 😶');
+        }
+    } 
+    catch (error) {
+        console.error('========> Error fetching cafe details: ', error.message);
+        bot.sendMessage(chatId, 'Error fetching cafe details.');
+    }
+}
+// #endregion
 
 async function getCoordinates(address) {
     const geocodeUrl = 'https://maps.googleapis.com/maps/api/geocode/json';
@@ -166,7 +331,7 @@ async function getCoordinates(address) {
         }
     }
     catch (error) {
-        console.error('--> Geocoding API Error: ', error.message);
+        console.error('========> Geocoding API Error: ', error.message);
         return null;
     }
 }
@@ -178,7 +343,7 @@ async function findCafes(latitude, longitude, radius) {
         const response = await axios.get(placesUrl, {
             params: {
                 location: `${latitude},${longitude}`,
-                radius,
+                radius: radius,
                 type: 'cafe',
                 key: GOOGLE_API_KEY,
             },
@@ -201,7 +366,7 @@ async function findCafes(latitude, longitude, radius) {
         }
     }
     catch (error) {
-        console.error('Places API Error: ', error.message);
+        console.error('========> Places API Error: ', error.message);
     }
 }
 
@@ -220,7 +385,7 @@ async function saveCafesToDB(cafes) {
         console.log('Cafes successfully saved to dynamic_cafes table');
     }
     catch (error) {
-        console.error('Error saving cafe to database: ', error.message);
+        console.error('========> Error saving cafe to database: ', error.message);
     }
 }
 
@@ -244,7 +409,7 @@ async function getCafeById(cafeId) {
         return cafe;
     }
     catch (error) {
-        console.error('Error getting cafe: ', error.message);
+        console.error('========> Error getting cafe: ', error.message);
         return null;
     }
 }
@@ -280,14 +445,6 @@ async function sendMapLink(cafe, chatId) {
         { parse_mode: 'Markdown' }
     );  
 }
-
-// Виклик функції з прикладними даними
-// const userAddress = 'Куліша 28 Борислав'; // Адреса користувача
-// const searchRadius = 1500; // Радіус пошуку (2 км)
-  
-// searchCafesByAddress(userAddress, searchRadius);
-// console.log("Кафе з БД: ");
-// getCafesFromDB();
 
 const initialChoice = async (chatId) => {
     const options = {
