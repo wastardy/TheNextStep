@@ -25,11 +25,31 @@ const main = () => {
     bot.onText(/\/start/, (msg) => {
         const chatId = msg.chat.id;
         
-        // if (userSteps[chatId] === 'choosing_category') return;
+        // if (userLastCommand[chatId] === '/open_website') {
+        //     return;
+        // }
+        
         resetUserState(chatId);
         userSteps[chatId] = 'choosing_category';
 
         initialChoice(chatId);  
+    });
+
+    bot.onText(/\/open_website/, (msg) => {
+        const chatId = msg.chat.id;
+
+        bot.sendMessage(chatId, 'Follow the link below to open the web page:', {
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        { 
+                            text: 'for better overview of places🎴', 
+                            url: 'https://wastardy.github.io/foresthideways_website/' 
+                        }
+                    ]
+                ]
+            }
+        });
     });
 
     bot.on('message', async (msg) => {
@@ -105,7 +125,7 @@ const main = () => {
                 await bot.sendMessage(
                     chatId,
                     `Street ${street} not found in ${city}` + 
-                    `Please enter a valid street😌`
+                    `Please enter a valid street 😌`
                 );
 
                 await bot.sendMessage(
