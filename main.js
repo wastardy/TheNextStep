@@ -18,7 +18,8 @@ let selectedCategory = '';
 
 const main = () => {
     bot.setMyCommands([
-        { command: `/start`, description: 'start chat with the bot' }
+        { command: `/start`, description: 'start chat with the bot' },
+        { command: `/open_website`, description: 'open the website to choose the most suitable place' }
     ]);
 
     bot.onText(/\/start/, (msg) => {
