@@ -1,0 +1,10 @@
+# dependencies folder
+node_modules/
+
+# confidential files with tokens and keys
+token.js
+google_api_key.js
+
+# other
+template.js
+backup.js

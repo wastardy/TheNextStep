@@ -1,0 +1,307 @@
+const telegramAPI = require('node-telegram-bot-api');
+const { inlineKeyboard } = require('telegraf/markup');
+const { callbackQuery } = require('telegraf/filters');
+const axios = require('axios'); // for HTTP requests
+const express = require('express');
+const token = require('./token.js');
+const GOOGLE_API_KEY = require('./google_api_key.js');
+const connectDB = require('./db.js')
+const Cafe = require('./models/cafe.js');
+
+const bot = new telegramAPI(token, { polling: true });
+
+// --------------------------------------------------
+
+const userSteps = {};
+const defaultRange = 1000; 
+let selectedCategory = '';
+
+const main = () => {
+    bot.setMyCommands([
+        { command: `/start`, description: 'start chat with the bot' }
+    ]);
+
+    bot.onText(/\/start/, (msg) => {
+        const chatId = msg.chat.id;
+        
+        // if (userSteps[chatId] === 'choosing_category') return;
+        resetUserState(chatId);
+        userSteps[chatId] = 'choosing_category';
+
+        initialChoice(chatId);  
+    });
+
+    bot.on('message', async (msg) => {
+        const chatId = msg.chat.id;
+        const text = msg.text;
+        
+        if (text === `/start`) return; 
+
+        if (text && ['cafe', 'sport', 'park', 'culture'].includes(text.toLowerCase())) {
+            selectedCategory = text;
+            userSteps[chatId] = 'waiting_for_location'; 
+            await bot.sendMessage(
+                chatId, 
+                `You chose ${selectedCategory}.` + 
+                `\nPlease enter your location 📌` + 
+                `\n(e.g. Шевченка 13 Київ)`
+            );
+        }
+        else if (userSteps[chatId] === 'waiting_for_location') {
+            userSteps[chatId] = {
+                step: 'waiting_for_range',
+                location: text
+            };
+            await bot.sendMessage(
+                chatId, 
+                `Now enter the search range in m` +
+                `\n(Default is ${defaultRange} m)`
+            );
+            console.log(text);
+        }
+        else if (userSteps[chatId]?.step === 'waiting_for_range') {
+            const location = userSteps[chatId].location;
+            
+            let range = parseFloat(text);
+
+            if (isNaN(range) || range <= 0) {
+                range = defaultRange;
+                await bot.sendMessage(
+                    chatId, 
+                    `Invalid range value. <b>Set to default: ${defaultRange} m.</b>`, 
+                    { parse_mode: "HTML"}
+                );
+            }
+            
+            console.log(text);
+
+            await bot.sendMessage(
+                chatId, 
+                `Searching ${selectedCategory}'s around <b>'${location}'</b> within a <b>${range} m</b> radius... 🔍`,
+                { parse_mode: "HTML"}    
+            );
+            
+            await searchCafesByAddress(location, range);
+            await sendCafeButtons(chatId);
+
+            resetUserState(chatId);
+        }
+        else {
+            initialChoice(chatId);
+        }
+    });
+
+    bot.on('callback_query', async (callbackQuery) => {
+        const cafeId = callbackQuery.data;
+        const chatId = callbackQuery.message.chat.id;
+    
+        try {
+            const cafe = await getCafeById(cafeId);
+    
+            if (cafe) {
+                sendCafeInfo(cafe, chatId);
+                // sendMapImageUrl(cafe, chatId);
+                sendMapLink(cafe, chatId); 
+            } 
+            else {
+                await bot.sendMessage(chatId, 'Cafe not found 😶');
+            }
+        } 
+        catch (error) {
+            console.error('--> Error fetching cafe details: ', error.message);
+            bot.sendMessage(chatId, 'Error fetching cafe details.');
+        }
+    });
+};
+
+main();
+
+
+
+
+// --------> functions
+
+async function sendCafeButtons(chatId) {
+    try {
+        const cafes = await getCafesFromDB();
+
+        if (cafes.length === 0) {
+            return await bot.sendMessage(chatId, 'Cafes not found'); 
+        }
+
+        // creating buttons
+        const cafeButtons = cafes.map((cafe) => [
+            { text: cafe.name, callback_data: cafe._id.toString() }
+        ]);
+
+        await bot.sendMessage(chatId, 'Choose cafe:', {
+            reply_markup: { inline_keyboard: cafeButtons }
+        });
+    }
+    catch (error) {
+        console.error('--> Error retrieving cafe from database: ', error.message);
+        bot.sendMessage(chatId, 'Error retrieving cafe from database');
+    }
+}
+
+
+async function getCoordinates(address) {
+    const geocodeUrl = 'https://maps.googleapis.com/maps/api/geocode/json';
+
+    try {
+        const response = await axios.get(geocodeUrl, {
+            params: {
+                address: address,
+                key: GOOGLE_API_KEY,
+            },
+        });
+
+        if (response.data.status === 'OK') {
+            const location = response.data.results[0].geometry.location;
+            return location;
+        }
+        else {
+            console.error('Coordinates could not be found: ', response.data.status);
+            return null;
+        }
+    }
+    catch (error) {
+        console.error('--> Geocoding API Error: ', error.message);
+        return null;
+    }
+}
+
+async function findCafes(latitude, longitude, radius) {
+    const placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
+
+    try {
+        const response = await axios.get(placesUrl, {
+            params: {
+                location: `${latitude},${longitude}`,
+                radius,
+                type: 'cafe',
+                key: GOOGLE_API_KEY,
+            },
+        });
+
+        if (response.data.status === 'OK') {
+            const cafes = response.data.results;
+
+            console.log('Found cafes: ');
+            cafes.forEach((cafe) => {
+                console.log(`Name: ${cafe.name}, Address: ${cafe.vicinity}, Rating: ${cafe.rating}`);
+            });
+
+            await Cafe.deleteMany({});
+
+            await saveCafesToDB(cafes);
+        }
+        else {
+            console.log('--> Cafe search error: ', response.data.status);
+        }
+    }
+    catch (error) {
+        console.error('Places API Error: ', error.message);
+    }
+}
+
+async function saveCafesToDB(cafes) {
+    try {
+        const cafeDocs = cafes.map((cafe) => ({
+            name: cafe.name,
+            address: cafe.vicinity,
+            rating: cafe.rating || 0,
+            location: cafe.geometry.location,
+            place_id: cafe.place_id,
+        }));
+
+        await Cafe.insertMany(cafeDocs);
+        
+        console.log('Cafes successfully saved to dynamic_cafes table');
+    }
+    catch (error) {
+        console.error('Error saving cafe to database: ', error.message);
+    }
+}
+
+const getCafesFromDB = async () => Cafe.find();
+
+async function searchCafesByAddress(address, radius) {
+    await connectDB();
+
+    const coordinates = await getCoordinates(address);
+    if (coordinates) {
+        await findCafes(coordinates.lat, coordinates.lng, radius);
+    }
+    else {
+        console.log('Could not find the cafe due to an error in the address.');
+    }
+}
+
+async function getCafeById(cafeId) {
+    try {
+        const cafe = await Cafe.findById(cafeId);
+        return cafe;
+    }
+    catch (error) {
+        console.error('Error getting cafe: ', error.message);
+        return null;
+    }
+}
+
+async function sendCafeInfo(cafe, chatId) {
+    const message = `<b>${cafe.name}</b>` + 
+                    `\n\n<b>Address:</b> ${cafe.address}📍` + 
+                    `\n\n<b>Rating:</b> ${cafe.rating || '-'} ⭐`;
+                
+    await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
+}
+
+async function sendMapImageUrl(cafe, chatId) {
+    const { location } = cafe;
+    const latitude = location.lat;
+    const longitude = location.lng;
+
+    const imageUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+    
+    await bot.sendPhoto(chatId, imageUrl);
+}
+
+async function sendMapLink(cafe, chatId) {
+    const { location } = cafe;
+    const latitude = location.lat;
+    const longitude = location.lng;
+
+    const mapUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
+    
+    await bot.sendMessage(
+        chatId, 
+        `Here is the map to [${cafe.name}](${mapUrl})`, 
+        { parse_mode: 'Markdown' }
+    );  
+}
+
+// Виклик функції з прикладними даними
+// const userAddress = 'Куліша 28 Борислав'; // Адреса користувача
+// const searchRadius = 1500; // Радіус пошуку (2 км)
+  
+// searchCafesByAddress(userAddress, searchRadius);
+// console.log("Кафе з БД: ");
+// getCafesFromDB();
+
+const initialChoice = async (chatId) => {
+    const options = {
+        reply_markup: {
+          keyboard: [
+            [`Cafe`, `Sport`],
+            [`Park`, `Culture`],
+          ],
+          resize_keyboard: true,
+          one_time_keyboard: true
+        }
+      };
+    
+    await bot.sendMessage(chatId, `Select category`, options); 
+};
+
+const resetUserState = (chatId) => userSteps[chatId] = null;
