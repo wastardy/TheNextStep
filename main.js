@@ -61,7 +61,7 @@ const main = () => {
                 
                 await bot.sendMessage(
                     chatId,
-                    `Invalid city name🥲` + 
+                    `Invalid city name 🥲` + 
                     `\n\nPlease enter a valid city name without` + 
                     `\n- numbers\n- extra spaces\n- multiple hyphens\n- etc`
                 );
@@ -188,8 +188,30 @@ main();
 
 // #region validations
 async function isValidCityInput(city) {
-    const cityPattern = /^[a-zA-Z\u0400-\u04FF]+(?:[ -][a-zA-Z\u0400-\u04FF]+)*$/;
-    return cityPattern.test(city);
+    // const cityPattern = /^[a-zA-Z\u0400-\u04FF]+(?:[ -][a-zA-Z\u0400-\u04FF]+)*$/;
+    // return cityPattern.test(city);
+
+    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(city)}&key=${GOOGLE_API_KEY}`;
+
+    try {
+        const response = await axios.get(url);
+
+        if (response.data.status === 'OK') {
+            const result = response.data.result[0];
+            console.log('========> Результат містить: ', result);
+            
+            console.log('========> City found: ', result.formatted_address);
+            return true;
+        }
+        else if (response.data.status === 'ZERO_RESULTS') {
+            console.log('========> City not found');
+            return false;
+        }
+    }
+    catch (error) {
+        console.error('========> Error with Geocoding API:', error);
+        return false;
+    }
 }
 
 async function isValidStreetInput(city, street) {
