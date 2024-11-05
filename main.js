@@ -14,8 +14,19 @@ const bot = new telegramAPI(token, { polling: true });
 
 const userSteps = {};
 const defaultRange = 1000; 
-let currentMessageId;
+
+const categories = {
+    'Cafe': 'cafe', 
+    'Gym': 'gym', 
+    'Park': 'park', 
+    'Restaurant': 'restaurant',
+    'Spa': 'spa',
+    'Movie Theater': 'movie_theater',
+};
+
+let currentMessageId = '';
 let selectedCategory = '';
+let category = '';
 
 const main = () => {
     bot.setMyCommands([
@@ -39,16 +50,21 @@ const main = () => {
         if (text === `/start`) return; 
 
         // place types from places api:
-        // gym, night_club, museum, park, restaurant, spa, ~florist, movie_theater
-        if (text && ['cafe', 'sport', 'park', 'culture'].includes(text.toLowerCase())) {
+        if (text && categories[text]) {
             selectedCategory = text;
+            category = categories[text];
+
+            console.log('\n========> Користувач вибрав: ', selectedCategory);
+            console.log('========> Вибір, як параметр: ', category);
+
             userSteps[chatId] = 'waiting_for_city'; 
             
             await bot.sendMessage(
                 chatId, 
-                `You chose ${selectedCategory}.` + 
+                `You chose <b>${selectedCategory}</b>` + 
                 `\nPlease enter your city 📌` + 
-                `\n(e.g. Київ, San Francisco, абу-дабі)`
+                `\n(e.g. Київ, San Francisco, Абу-Дабі)`,
+                { parse_mode: "HTML"}
             );
         }
         // перевірка на введення міста і продовження введення вулиці
@@ -70,7 +86,7 @@ const main = () => {
                 await bot.sendMessage(
                     chatId,  
                     `\nPlease enter your city 📌` + 
-                    `\n(e.g. Київ, San Francisco, абу-дабі)`
+                    `\n(e.g. Київ, San Francisco, Абу-Дабі)`
                 );
             }
             else {
@@ -126,8 +142,9 @@ const main = () => {
 
                 await bot.sendMessage(
                     chatId, 
-                    `Now enter the search range between 50 and 5000 meters` +
-                    `\n(Default is ${defaultRange} meters)`
+                    `Now enter the search range <b>between 50 and 5000 meters</b>` +
+                    `\n(Default is ${defaultRange} meters)`, 
+                    { parse_mode: 'HTML' }
                 );
 
                 console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId]);
@@ -461,7 +478,9 @@ async function saveCafesToDB(cafes) {
     }
 }
 
-const getCafesFromDB = async () => Cafe.find();
+async function getCafesFromDB() {
+    Cafe.find();
+}
 
 async function searchCafesByAddress(address, radius) {
     await connectDB();
@@ -518,19 +537,22 @@ async function sendMapLink(cafe, chatId) {
     );  
 }
 
-const initialChoice = async (chatId) => {
+async function initialChoice(chatId) {
     const options = {
         reply_markup: {
-          keyboard: [
-            [`Cafe`, `Sport`],
-            [`Park`, `Culture`],
-          ],
-          resize_keyboard: true,
-          one_time_keyboard: true
+            keyboard: [
+                ['Cafe', 'Gym'],
+                ['Park', 'Restaurant'],
+                ['Spa', 'Movie Theater'],
+            ],
+            resize_keyboard: true,
+            one_time_keyboard: true
         }
-      };
+    };
     
     await bot.sendMessage(chatId, `Select category`, options); 
-};
+}
 
-const resetUserState = (chatId) => userSteps[chatId] = null;
+function resetUserState(chatId) {
+    userSteps[chatId] = null;
+}
