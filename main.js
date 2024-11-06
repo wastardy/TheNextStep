@@ -13,20 +13,16 @@ const bot = new telegramAPI(token, { polling: true });
 // --------------------------------------------------
 
 const userSteps = {};
-const userLastCommand = {};
 const defaultRange = 1000; 
 let selectedCategory = '';
 
 const main = () => {
     bot.setMyCommands([
         { command: `/start`, description: 'start chat with the bot' },
-        { command: `/open_website`, description: 'open the website to choose the most suitable place' }
     ]);
 
     bot.onText(/\/start/, (msg) => {
         const chatId = msg.chat.id;
-        
-        userLastCommand[chatId] = '/start';
         
         resetUserState(chatId);
         userSteps[chatId] = 'choosing_category';
@@ -34,24 +30,10 @@ const main = () => {
         initialChoice(chatId);  
     });
 
-    bot.onText(/\/open_website/, (msg) => {
-        const chatId = msg.chat.id;
-
-        userLastCommand[chatId] = '/open_website';
-
-        bot.sendMessage(chatId, 'Follow the link below to open the web page:', {
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        { 
-                            text: 'for better overview of places🎴', 
-                            url: 'https://wastardy.github.io/foresthideways_website/' 
-                        }
-                    ]
-                ]
-            }
-        });
-    });
+    bot.on('polling_error', (error) => {
+        console.log(error.code);  
+        console.log(error.message);  
+    });    
 
     bot.on('message', async (msg) => {
         const chatId = msg.chat.id;
@@ -59,10 +41,6 @@ const main = () => {
         
         if (text === `/start`) return; 
 
-        if (userLastCommand[chatId] === '/open_website') return;
-
-        // place types from places api:
-        // gym, night_club, museum, park, restaurant, spa, ~florist, movie_theater
         if (text && ['cafe', 'sport', 'park', 'culture'].includes(text.toLowerCase())) {
             selectedCategory = text;
             userSteps[chatId] = 'waiting_for_city'; 
@@ -77,8 +55,6 @@ const main = () => {
         // перевірка на введення міста і продовження введення вулиці
         else if (userSteps[chatId] === 'waiting_for_city') {
             console.log('\n========> Введене місто: ', text);
-
-            if (text === '/open_website') return;
 
             const isValidCity = await isValidCityInput(text);
 
@@ -122,8 +98,6 @@ const main = () => {
             let city = userSteps[chatId].city;
             let street = text;
 
-            if (street === '/open_website') return;
-
             const isValidStreet = await isValidStreetInput(city, street);
 
             if (!isValidStreet) {
@@ -146,7 +120,7 @@ const main = () => {
                 let address = `${city} ${street}`;
 
                 userSteps[chatId] = {
-                    ...userSteps[chatId], // to save field city
+                    ...userSteps[chatId],
                     step: 'waiting_for_range',
                     location: address
                 };
@@ -167,8 +141,6 @@ const main = () => {
             console.log('========> Введений діапазон пошуку: ', text);
 
             let range = parseFloat(text);
-
-            if (range === '/open_website') return;
 
             const isValidRange = await isValidRangeInput(range);
 
@@ -192,8 +164,6 @@ const main = () => {
             }
         }
         else {
-            if (userLastCommand[chatId] === '/open_website') return;
-
             initialChoice(chatId);
         }
     });
@@ -255,6 +225,27 @@ async function isValidRangeInput(range) {
 // #endregion
 
 // #region buttons
+async function sendWebsiteButton(chatId) {
+    try {
+        bot.sendMessage(chatId, 'Follow the link below to open the web page:', {
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        { 
+                            text: 'for better overview of places🎴', 
+                            url: 'https://wastardy.github.io/foresthideways_website/' 
+                        }
+                    ]
+                ]
+            }
+        });
+    }
+    catch (error) {
+        console.error('========> Error sending website button: ', error.message);
+        bot.sendMessage(chatId, 'Error sending website button');
+    }
+}
+
 async function sendCafeButtons(chatId) {
     try {
         const cafes = await getCafesFromDB();
@@ -268,7 +259,9 @@ async function sendCafeButtons(chatId) {
             { text: cafe.name, callback_data: cafe._id.toString() }
         ]);
 
-        await bot.sendMessage(chatId, 'Choose cafe:', {
+        sendWebsiteButton(chatId);
+
+        await bot.sendMessage(chatId, 'Or Choose cafe:', {
             reply_markup: { inline_keyboard: cafeButtons }
         });
     }
