@@ -14,6 +14,7 @@ const bot = new telegramAPI(token, { polling: true });
 
 const userSteps = {};
 const defaultRange = 1000; 
+let currentMessageId;
 let selectedCategory = '';
 
 const main = () => {
@@ -158,7 +159,7 @@ const main = () => {
                 );
 
                 await searchCafesByAddress(location, range);
-                await sendCafeButtons(chatId);
+                await sendCafeButtons(chatId, 1);
 
                 resetUserState(chatId);
             }
@@ -171,12 +172,17 @@ const main = () => {
     bot.on('callback_query', async (callbackQuery) => {
         const callbackData = callbackQuery.data;
         const chatId = callbackQuery.message.chat.id;
+        const messageId = callbackQuery.message.message_id;
     
         if (callbackData === 'set_default_range') {
             await handleSetDefaultRange(chatId, userSteps);
         }
         else if (callbackData === 'enter_range_again') {
             await handleEnterRangeAgain(chatId);
+        }
+        else if (callbackData.startsWith('page_')) {
+            const page = parseInt(callbackData.split('_')[1], 10);
+            await updateCafeButtons(chatId, page, messageId);
         }
         else {
             await handleCafeSelection(chatId, callbackData);
@@ -227,13 +233,13 @@ async function isValidRangeInput(range) {
 // #region buttons
 async function sendWebsiteButton(chatId) {
     try {
-        bot.sendMessage(chatId, 'Follow the link below to open the web page:', {
+        bot.sendMessage(chatId, 'Better overview of places:', {
             reply_markup: {
                 inline_keyboard: [
                     [
                         { 
-                            text: 'for better overview of places🎴', 
-                            url: 'https://wastardy.github.io/foresthideways_website/' 
+                            text: 'Open the web page🎴', 
+                            url: 'https://flariii.github.io/TheNextStep_website/' 
                         }
                     ]
                 ]
@@ -246,28 +252,91 @@ async function sendWebsiteButton(chatId) {
     }
 }
 
-async function sendCafeButtons(chatId) {
+async function sendCafeButtons(chatId, page = 1) {
+    const placesPerPage = 5;
+
     try {
         const cafes = await getCafesFromDB();
 
         if (cafes.length === 0) {
-            return await bot.sendMessage(chatId, 'Cafes not found'); 
+            return await bot.sendMessage(chatId, 'Cafes not found 🥲'); 
         }
 
+        // calculate start and end indexes for current page
+        const startIndex = (page - 1) * placesPerPage;
+        const endIndex = startIndex + placesPerPage;
+        const pagePlaces = cafes.slice(startIndex, endIndex);
+
         // creating buttons
-        const cafeButtons = cafes.map((cafe) => [
+        const cafeButtons = pagePlaces.map((cafe) => [
             { text: cafe.name, callback_data: cafe._id.toString() }
         ]);
 
-        sendWebsiteButton(chatId);
+        // navigation buttons
+        const navigationButtons = [];
+        if (page > 1) {
+            navigationButtons.push({ text: '⏮️ Previous', callback_data: `page_${page - 1}` });
+        }
+        if (endIndex < cafes.length) {
+            navigationButtons.push({ text: 'Next ⏭️', callback_data: `page_${page + 1}` });
+        }
+        if (navigationButtons.length > 0) {
+            cafeButtons.push(navigationButtons); // add arrows for current page
+        }
 
-        await bot.sendMessage(chatId, 'Or Choose cafe:', {
+        const message = await bot.sendMessage(chatId, 'Choose cafe:', {
             reply_markup: { inline_keyboard: cafeButtons }
         });
+        sendWebsiteButton(chatId);
+
+        currentMessageId = message.message_id;
     }
     catch (error) {
         console.error('========> Error retrieving cafe from database: ', error.message);
         bot.sendMessage(chatId, 'Error retrieving cafe from database');
+    }
+}
+
+async function updateCafeButtons(chatId, page, messageId) {
+    const placesPerPage = 5;
+
+    try {
+        const cafes = await getCafesFromDB();
+
+        if (cafes.length === 0) {
+            return await bot.sendMessage(chatId, 'Cafes not found 🥲'); 
+        }
+
+        // calculate start and end indexes for current page
+        const startIndex = (page - 1) * placesPerPage;
+        const endIndex = startIndex + placesPerPage;
+        const pagePlaces = cafes.slice(startIndex, endIndex);
+
+        // creating buttons
+        const cafeButtons = pagePlaces.map((cafe) => [
+            { text: cafe.name, callback_data: cafe._id.toString() }
+        ]);
+
+        // navigation buttons
+        const navigationButtons = [];
+        if (page > 1) {
+            navigationButtons.push({ text: '⏮️ Previous', callback_data: `page_${page - 1}` });
+        }
+        if (endIndex < cafes.length) {
+            navigationButtons.push({ text: 'Next ⏭️', callback_data: `page_${page + 1}` });
+        }
+        if (navigationButtons.length > 0) {
+            cafeButtons.push(navigationButtons); // add arrows for current page
+        }
+
+        // update buttons in existing message
+        await bot.editMessageReplyMarkup(
+            { inline_keyboard: cafeButtons },
+            { chat_id: chatId, message_id: messageId }
+        );
+    }
+    catch (error) {
+        console.error('========> Error updating cafe buttons: ', error.message);
     }
 }
 
@@ -312,7 +381,7 @@ async function handleSetDefaultRange(chatId, userSteps) {
     );
 
     await searchCafesByAddress(location, range);
-    await sendCafeButtons(chatId);
+    await sendCafeButtons(chatId, 1);
 
     resetUserState(chatId);
 }
