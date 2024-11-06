@@ -30,18 +30,22 @@ let category = '';
 
 const main = () => {
     bot.setMyCommands([
-        { command: `/start`, description: 'start chat with the bot' }
+        { command: `/start`, description: 'start chat with the bot' },
     ]);
 
     bot.onText(/\/start/, (msg) => {
         const chatId = msg.chat.id;
         
-        // if (userSteps[chatId] === 'choosing_category') return;
         resetUserState(chatId);
         userSteps[chatId] = 'choosing_category';
 
         initialChoice(chatId);  
     });
+
+    bot.on('polling_error', (error) => {
+        console.log(error.code);  
+        console.log(error.message);  
+    });    
 
     bot.on('message', async (msg) => {
         const chatId = msg.chat.id;
@@ -121,7 +125,7 @@ const main = () => {
                 await bot.sendMessage(
                     chatId,
                     `Street ${street} not found in ${city}` + 
-                    `Please enter a valid street😌`
+                    `Please enter a valid street 😌`
                 );
 
                 await bot.sendMessage(
@@ -135,7 +139,7 @@ const main = () => {
                 let address = `${city} ${street}`;
 
                 userSteps[chatId] = {
-                    ...userSteps[chatId], // to save field city
+                    ...userSteps[chatId],
                     step: 'waiting_for_range',
                     location: address
                 };
@@ -174,7 +178,7 @@ const main = () => {
                 );
 
                 await searchCafesByAddress(location, range);
-                await sendCafeButtons(chatId, 1); // <=============================================================
+                await sendCafeButtons(chatId, 1);
 
                 resetUserState(chatId);
             }
@@ -246,6 +250,27 @@ async function isValidRangeInput(range) {
 // #endregion
 
 // #region buttons
+async function sendWebsiteButton(chatId) {
+    try {
+        bot.sendMessage(chatId, 'Better overview of places:', {
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        { 
+                            text: 'Open the web page🎴', 
+                            url: 'https://flariii.github.io/TheNextStep_website/' 
+                        }
+                    ]
+                ]
+            }
+        });
+    }
+    catch (error) {
+        console.error('========> Error sending website button: ', error.message);
+        bot.sendMessage(chatId, 'Error sending website button');
+    }
+}
+
 async function sendCafeButtons(chatId, page = 1) {
     const placesPerPage = 5;
 
@@ -253,7 +278,7 @@ async function sendCafeButtons(chatId, page = 1) {
         const cafes = await getCafesFromDB();
 
         if (cafes.length === 0) {
-            return await bot.sendMessage(chatId, 'Cafes not found'); 
+            return await bot.sendMessage(chatId, 'Cafes not found 🥲'); 
         }
 
         // calculate start and end indexes for current page
@@ -281,6 +306,7 @@ async function sendCafeButtons(chatId, page = 1) {
         const message = await bot.sendMessage(chatId, 'Choose cafe:', {
             reply_markup: { inline_keyboard: cafeButtons }
         });
+        sendWebsiteButton(chatId);
 
         currentMessageId = message.message_id;
     }
@@ -297,7 +323,7 @@ async function updateCafeButtons(chatId, page, messageId) {
         const cafes = await getCafesFromDB();
 
         if (cafes.length === 0) {
-            return await bot.sendMessage(chatId, 'Cafes not found'); 
+            return await bot.sendMessage(chatId, 'Cafes not found 🥲'); 
         }
 
         // calculate start and end indexes for current page

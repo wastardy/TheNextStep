@@ -99,6 +99,29 @@ const requestLocation = (chatId) => {
     └── token.js
 */
 
+async function sendWebsiteButton(chatId) {
+    try {
+        bot.sendMessage(chatId, 'Follow the link below to open the web page:', {
+            reply_markup: {
+                inline_keyboard: [
+                    [
+                        { 
+                            text: 'for better overview of places🎴', 
+                            url: 'https://wastardy.github.io/foresthideways_website/' 
+                        }
+                    ]
+                ]
+            }
+        });
+    }
+    catch (error) {
+        console.error('========> Error sending website button: ', error.message);
+        bot.sendMessage(chatId, 'Error sending website button');
+    }
+}
+
+sendWebsiteButton(chatId);
+
 /* // список кафе в кнопках
     const sendCafeList = async (chatId, location, range, category) => {
     try {
