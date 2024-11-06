@@ -5,8 +5,22 @@ const axios = require('axios'); // for HTTP requests
 const express = require('express');
 const token = require('./token.js');
 const GOOGLE_API_KEY = require('./google_api_key.js');
+const { 
+    isValidCityInput, 
+    isValidStreetInput, 
+    isValidRangeInput 
+} = require('./validation.js');
+
+const { 
+    sendWebsiteButton, 
+    sendCafeButtons, 
+    updateCafeButtons, 
+    sendRangeSelectionButtons 
+} = require('./inline_buttons.js');
+
 const connectDB = require('./db.js')
 const Cafe = require('./models/cafe.js');
+const Gym = require('./models/gym.js');
 
 const bot = new telegramAPI(token, { polling: true });
 
@@ -166,7 +180,7 @@ const main = () => {
 
             if (!isValidRange) {
                 await bot.sendMessage(chatId, 'Incorrectly entered range');
-                await sendRangeSelectionButtons(chatId);
+                await sendRangeSelectionButtons(bot, chatId);
             }
             else {
                 console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId], `\n\n`);
@@ -178,7 +192,7 @@ const main = () => {
                 );
 
                 await searchCafesByAddress(location, range);
-                await sendCafeButtons(chatId, 1);
+                await sendCafeButtons(bot, chatId, 1);
 
                 resetUserState(chatId);
             }
@@ -201,7 +215,7 @@ const main = () => {
         }
         else if (callbackData.startsWith('page_')) {
             const page = parseInt(callbackData.split('_')[1], 10);
-            await updateCafeButtons(chatId, page, messageId);
+            await updateCafeButtons(bot, chatId, page, messageId);
         }
         else {
             await handleCafeSelection(chatId, callbackData);
@@ -210,171 +224,6 @@ const main = () => {
 };
 
 main();
-
-
-
-// #region validations
-async function isValidCityInput(city) {
-    const cityPattern = /^[a-zA-Z\u0400-\u04FF]+(?:[ -][a-zA-Z\u0400-\u04FF]+)*$/;
-    return cityPattern.test(city);
-}
-
-async function isValidStreetInput(city, street) {
-    const address = `${street}, ${city}`;
-    const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GOOGLE_API_KEY}`;
-
-    try {
-        // За допомогою axios.get відправляється запит до API, який передає сформовану адресу.
-        const response = await axios.get(url);
-
-        if (response.data.status === 'OK') {
-            const result = response.data.results[0];
-            console.log('========> Address found: ', result.formatted_address);
-            return true;
-        } 
-        else if (response.data.status === 'ZERO_RESULTS') {
-            console.log('========> Address not found');
-            return false;
-        }
-    } 
-    catch (error) {
-        console.error('========> Error with Geocoding API:', error);
-        return false;
-    }
-}
-
-async function isValidRangeInput(range) {
-    const rangePattern = /^[0-9]+$/;
-    return rangePattern.test(range) && range >= 50 && range <= 5000; 
-}
-// #endregion
-
-// #region buttons
-async function sendWebsiteButton(chatId) {
-    try {
-        bot.sendMessage(chatId, 'Better overview of places:', {
-            reply_markup: {
-                inline_keyboard: [
-                    [
-                        { 
-                            text: 'Open the web page🎴', 
-                            url: 'https://flariii.github.io/TheNextStep_website/' 
-                        }
-                    ]
-                ]
-            }
-        });
-    }
-    catch (error) {
-        console.error('========> Error sending website button: ', error.message);
-        bot.sendMessage(chatId, 'Error sending website button');
-    }
-}
-
-async function sendCafeButtons(chatId, page = 1) {
-    const placesPerPage = 5;
-
-    try {
-        const cafes = await getCafesFromDB();
-
-        if (!Array.isArray(cafes)) {
-            console.error('Received data is not an array:', cafes);
-            return await bot.sendMessage(chatId, 'Error retrieving cafes');
-        }
-
-        if (cafes.length === 0) {
-            return await bot.sendMessage(chatId, 'Cafes not found 🥲'); 
-        }
-
-        // calculate start and end indexes for current page
-        const startIndex = (page - 1) * placesPerPage;
-        const endIndex = startIndex + placesPerPage;
-        const pagePlaces = cafes.slice(startIndex, endIndex);
-
-        // creating buttons
-        const cafeButtons = pagePlaces.map((cafe) => [
-            { text: cafe.name, callback_data: cafe._id.toString() }
-        ]);
-
-        // navigation buttons
-        const navigationButtons = [];
-        if (page > 1) {
-            navigationButtons.push({ text: '⏮️ Previous', callback_data: `page_${page - 1}` });
-        }
-        if (endIndex < cafes.length) {
-            navigationButtons.push({ text: 'Next ⏭️', callback_data: `page_${page + 1}` });
-        }
-        if (navigationButtons.length > 0) {
-            cafeButtons.push(navigationButtons); // add arrows for current page
-        }
-
-        const message = await bot.sendMessage(chatId, 'Choose cafe:', {
-            reply_markup: { inline_keyboard: cafeButtons }
-        });
-        sendWebsiteButton(chatId);
-
-        currentMessageId = message.message_id;
-    }
-    catch (error) {
-        console.error('========> Error retrieving cafe from database: ', error.message);
-        bot.sendMessage(chatId, 'Error retrieving cafe from database');
-    }
-}
-
-async function updateCafeButtons(chatId, page, messageId) {
-    const placesPerPage = 5;
-
-    try {
-        const cafes = await getCafesFromDB();
-
-        if (cafes.length === 0) {
-            return await bot.sendMessage(chatId, 'Cafes not found 🥲'); 
-        }
-
-        // calculate start and end indexes for current page
-        const startIndex = (page - 1) * placesPerPage;
-        const endIndex = startIndex + placesPerPage;
-        const pagePlaces = cafes.slice(startIndex, endIndex);
-
-        // creating buttons
-        const cafeButtons = pagePlaces.map((cafe) => [
-            { text: cafe.name, callback_data: cafe._id.toString() }
-        ]);
-
-        // navigation buttons
-        const navigationButtons = [];
-        if (page > 1) {
-            navigationButtons.push({ text: '⏮️ Previous', callback_data: `page_${page - 1}` });
-        }
-        if (endIndex < cafes.length) {
-            navigationButtons.push({ text: 'Next ⏭️', callback_data: `page_${page + 1}` });
-        }
-        if (navigationButtons.length > 0) {
-            cafeButtons.push(navigationButtons); // add arrows for current page
-        }
-
-        // update buttons in existing message
-        await bot.editMessageReplyMarkup(
-            { inline_keyboard: cafeButtons },
-            { chat_id: chatId, message_id: messageId }
-        );
-    }
-    catch (error) {
-        console.error('========> Error updating cafe buttons: ', error.message);
-    }
-}
-
-async function sendRangeSelectionButtons(chatId) {
-    await bot.sendMessage(chatId, 'Select the appropriate action:', {
-        reply_markup: {
-            inline_keyboard: [
-                [{ text: 'Set default range (1000 m)', callback_data: 'set_default_range' }],
-                [{ text: 'Enter search range again', callback_data: 'enter_range_again'}]
-            ]
-        }
-    });
-}
-// #endregion
 
 // #region callback_handlers
 async function handleEnterRangeAgain(chatId) {
@@ -455,6 +304,7 @@ async function getCoordinates(address) {
         return null;
     }
 }
+
 
 async function findCafes(latitude, longitude, radius) {
     const placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
