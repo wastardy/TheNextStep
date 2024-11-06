@@ -277,6 +277,11 @@ async function sendCafeButtons(chatId, page = 1) {
     try {
         const cafes = await getCafesFromDB();
 
+        if (!Array.isArray(cafes)) {
+            console.error('Received data is not an array:', cafes);
+            return await bot.sendMessage(chatId, 'Error retrieving cafes');
+        }
+
         if (cafes.length === 0) {
             return await bot.sendMessage(chatId, 'Cafes not found 🥲'); 
         }
@@ -505,7 +510,14 @@ async function saveCafesToDB(cafes) {
 }
 
 async function getCafesFromDB() {
-    Cafe.find();
+    try {
+        const cafes = await Cafe.find();
+        return cafes || [];
+    }
+    catch (error) {
+        console.error('======> Error fetching cafes getCafesFromDB():', error);
+        return []; 
+    }
 }
 
 async function searchCafesByAddress(address, radius) {
