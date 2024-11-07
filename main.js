@@ -5,14 +5,14 @@ const axios = require('axios'); // for HTTP requests
 const express = require('express');
 const token = require('./token.js');
 const GOOGLE_API_KEY = require('./google_api_key.js');
+
 const { 
     isValidCityInput, 
     isValidStreetInput, 
     isValidRangeInput 
 } = require('./validation.js');
 
-const { 
-    sendWebsiteButton, 
+const {  
     sendCafeButtons, 
     updateCafeButtons, 
     sendRangeSelectionButtons 
@@ -21,6 +21,19 @@ const {
 const connectDB = require('./db.js')
 const Cafe = require('./models/cafe.js');
 const Gym = require('./models/gym.js');
+const Park = require('./models/park.js');
+const Restaurant = require('./models/restaurant.js');
+const Spa = require('./models/spa.js');
+const MovieTheater = require('./models/movie_theater.js');
+
+// const models = {
+//     cafe: Cafe,
+//     gym: Gym,
+//     park: Park,
+//     restaurant: Restaurant,
+//     spa: Spa,
+//     movie_theater: MovieTheater,
+// };
 
 const bot = new telegramAPI(token, { polling: true });
 
@@ -38,9 +51,28 @@ const categories = {
     'Movie Theater': 'movie_theater',
 };
 
+const dbTables = {
+    Cafe: Cafe,
+    Gym: Gym,
+    Park: Park,
+    Restaurant: Restaurant,
+    Spa: Spa,
+    MovieTheater: MovieTheater,
+};
+
+function handleInitialButtonClick(chatId, buttonName, userSteps) {
+    if (dbTables[buttonName]) {
+        userSteps[chatId] = {
+            ...userSteps[chatId],
+            requiredTable: buttonName,
+        };
+    }
+}
+
 let currentMessageId = '';
-let selectedCategory = '';
-let category = '';
+let slectedCategoryDB = '';
+
+
 
 const main = () => {
     bot.setMyCommands([
@@ -63,20 +95,29 @@ const main = () => {
 
     bot.on('message', async (msg) => {
         const chatId = msg.chat.id;
+        const userId = msg.from.id;
         const text = msg.text;
         
         if (text === `/start`) return; 
 
-        // place types from places api:
         if (text && categories[text]) {
-            selectedCategory = text;
-            category = categories[text];
 
-            console.log('\n========> Користувач вибрав: ', selectedCategory);
-            console.log('========> Вибір, як параметр: ', category);
+            let selectedCategory = text;
+            let placeType = categories[text];
+            // slectedCategoryDB = models[placeType];
 
-            userSteps[chatId] = 'waiting_for_city'; 
+            console.log('\n\n========> Вибір, як параметр: ', placeType);
+
+            userSteps[chatId] = {
+                userId: userId,
+                step: 'waiting_for_city', 
+                requiredTable: selectedCategory,
+                placeType: placeType,
+            }; 
             
+            console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId]);
+            console.log('---------------------------------------\n')
+
             await bot.sendMessage(
                 chatId, 
                 `You chose <b>${selectedCategory}</b>` + 
@@ -85,8 +126,7 @@ const main = () => {
                 { parse_mode: "HTML"}
             );
         }
-        // перевірка на введення міста і продовження введення вулиці
-        else if (userSteps[chatId] === 'waiting_for_city') {
+        else if (userSteps[chatId]?.step === 'waiting_for_city') {
             console.log('\n========> Введене місто: ', text);
 
             const isValidCity = await isValidCityInput(text);
@@ -108,25 +148,27 @@ const main = () => {
                 );
             }
             else {
-                console.log('\n========> Прийнятий ввід міста: ', text);
+                console.log('========> Прийнятий ввід міста: ', text);
 
                 userSteps[chatId] = {
+                    ...userSteps[chatId],
                     step: 'waiting_for_street',
                     city: text
                 };
     
+                console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId]);
+                console.log('---------------------------------------\n\n');
+
                 await bot.sendMessage(
                     chatId, 
                     `Now enter your street with number 📌` +
                     `\n(e.g. 3 Abbey Rd., Шевченка 7)`
                 );
-
-                console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId]);
             }
         }
         // перевірка на введення вулиці і введення діапазону пошуку
         else if (userSteps[chatId]?.step === 'waiting_for_street') {
-            console.log('\n\n========> Введена вулиця: ', text);
+            console.log('========> Введена вулиця: ', text);
 
             let city = userSteps[chatId].city;
             let street = text;
@@ -149,14 +191,17 @@ const main = () => {
                 );
             }
             else {
-                console.log('\n========> Прийнятий ввід вулиці: ', text);
+                console.log('========> Прийнятий ввід вулиці: ', street);
                 let address = `${city} ${street}`;
 
                 userSteps[chatId] = {
                     ...userSteps[chatId],
                     step: 'waiting_for_range',
-                    location: address
+                    location: address,
                 };
+
+                console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId]);
+                console.log('---------------------------------------\n');
 
                 await bot.sendMessage(
                     chatId, 
@@ -164,13 +209,11 @@ const main = () => {
                     `\n(Default is ${defaultRange} meters)`, 
                     { parse_mode: 'HTML' }
                 );
-
-                console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId]);
             }
         }
         else if (userSteps[chatId]?.step === 'waiting_for_range') {
             const location = userSteps[chatId].location;
-            
+
             console.log('\n\n========> Загальна локація користувача: ', location);
             console.log('========> Введений діапазон пошуку: ', text);
 
@@ -183,15 +226,27 @@ const main = () => {
                 await sendRangeSelectionButtons(bot, chatId);
             }
             else {
-                console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId], `\n\n`);
+                console.log('========> Прийнятий ввід діапазону: ', range);
+
+                userSteps[chatId] = {
+                    ...userSteps[chatId],
+                    searchRange: range,
+                };
+
+                console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId]);
+                console.log('---------------------------------------\n\n');
 
                 await bot.sendMessage(
                     chatId, 
-                    `Searching ${selectedCategory}'s around <b>'${location}'</b> within a <b>${range} m</b> radius... 🔍`,
+                    `Searching ${userSteps[chatId].placeType}'s ` + 
+                    `around <b>'${location}'</b> within a <b>${range} m</b> radius... 🔍`,
                     { parse_mode: "HTML"}    
                 );
 
-                await searchCafesByAddress(location, range);
+                const placeType = userSteps[chatId].placeType;
+                const requiredTable = userSteps[chatId].requiredTable;
+
+                await searchPlacesByAddress(location, range, placeType, requiredTable);
                 await sendCafeButtons(bot, chatId, 1);
 
                 resetUserState(chatId);
@@ -246,6 +301,8 @@ async function handleSetDefaultRange(chatId, userSteps) {
     
     const location = userSteps[chatId].location;
     const range = userSteps[chatId].range;
+    const placeType = userSteps[chatId].placeType;
+    const requiredTable = userSteps[chatId].requiredTable;
 
     await bot.sendMessage(
         chatId, 
@@ -253,28 +310,27 @@ async function handleSetDefaultRange(chatId, userSteps) {
         { parse_mode: "HTML"}    
     );
 
-    await searchCafesByAddress(location, range);
+    await searchPlacesByAddress(location, range, placeType, requiredTable);
     await sendCafeButtons(chatId, 1);
 
     resetUserState(chatId);
 }
 
-async function handleCafeSelection(chatId, cafeId) {
+async function handleCafeSelection(chatId, placeId) {
     try {
-        const cafe = await getCafeById(cafeId);
+        const place = await getPlaceById(placeId);
 
-        if (cafe) {
-            await sendCafeInfo(cafe, chatId);
-            // await sendMapImageUrl(cafe, chatId);
-            await sendMapLink(cafe, chatId); 
+        if (place) {
+            await sendPlaceInfo(place, chatId);
+            await sendMapLink(place, chatId); 
         } 
         else {
-            await bot.sendMessage(chatId, 'Cafe not found 😶');
+            await bot.sendMessage(chatId, 'Place not found 😶');
         }
     } 
     catch (error) {
-        console.error('========> Error fetching cafe details: ', error.message);
-        bot.sendMessage(chatId, 'Error fetching cafe details.');
+        console.error(`========> Error fetching place details: `, error.message);
+        bot.sendMessage(chatId, 'Error fetching place details.');
     }
 }
 // #endregion
@@ -305,8 +361,7 @@ async function getCoordinates(address) {
     }
 }
 
-
-async function findCafes(latitude, longitude, radius) {
+async function findPlaces(latitude, longitude, radius, placeType, model) {
     const placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
 
     try {
@@ -314,71 +369,76 @@ async function findCafes(latitude, longitude, radius) {
             params: {
                 location: `${latitude},${longitude}`,
                 radius: radius,
-                type: 'cafe',
+                type: placeType,
                 key: GOOGLE_API_KEY,
             },
         });
 
         if (response.data.status === 'OK') {
-            const cafes = response.data.results;
+            const places = response.data.results;
 
-            console.log('Found cafes: ');
-            cafes.forEach((cafe) => {
-                console.log(`Name: ${cafe.name}, Address: ${cafe.vicinity}, Rating: ${cafe.rating}`);
+            if (!model) {
+                console.log(`-------> Invalid datatable type -> ${model}`);
+                return;
+            }
+
+            console.log(`Found ${placeType}s:`);
+            places.forEach((place) => {
+                console.log(`Name: ${place.name}, Address: ${place.vicinity}, Rating: ${place.rating}`);
             });
 
-            await Cafe.deleteMany({});
+            await model.deleteMany({});
 
-            await saveCafesToDB(cafes);
+            await savePlacesToDB(places, model);
         }
         else {
-            console.log('--> Cafe search error: ', response.data.status);
+            console.error(`-------> ${placeType} search error: `, response.data.status);
         }
     }
     catch (error) {
-        console.error('========> Places API Error: ', error.message);
+        console.error('-------> Places API Error: ', error.message);
     }
 }
 
-async function saveCafesToDB(cafes) {
+async function savePlacesToDB(places, Model) {
     try {
-        const cafeDocs = cafes.map((cafe) => ({
-            name: cafe.name,
-            address: cafe.vicinity,
-            rating: cafe.rating || 0,
-            location: cafe.geometry.location,
-            place_id: cafe.place_id,
+        const placeDocs = places.map((place) => ({
+            name: place.name,
+            address: place.vicinity,
+            rating: place.rating || 0,
+            location: place.geometry.location,
+            place_id: place.place_id,
         }));
 
-        await Cafe.insertMany(cafeDocs);
+        await Model.insertMany(placeDocs);
         
-        console.log('Cafes successfully saved to dynamic_cafes table');
+        console.log(`-------> Places successfully saved to ${Model} table`);
     }
     catch (error) {
-        console.error('========> Error saving cafe to database: ', error.message);
+        console.error(`-------> Error saving ${placeType}s to database: `, error.message);
     }
 }
 
-async function getCafesFromDB() {
+async function getPlacesFromDB() {
     try {
-        const cafes = await Cafe.find();
-        return cafes || [];
+        const places = await Model.find();
+        return places || [];
     }
     catch (error) {
-        console.error('======> Error fetching cafes getCafesFromDB():', error);
+        console.error('======> Error fetching places getPlacesFromDB():', error);
         return []; 
     }
 }
 
-async function searchCafesByAddress(address, radius) {
+async function searchPlacesByAddress(address, radius, placeType, model) {
     await connectDB();
 
     const coordinates = await getCoordinates(address);
     if (coordinates) {
-        await findCafes(coordinates.lat, coordinates.lng, radius);
+        await findPlaces(coordinates.lat, coordinates.lng, radius, placeType, model);
     }
     else {
-        console.log('Could not find the cafe due to an error in the address.');
+        console.log('=========> Could not find place due to an error in the address.');
     }
 }
 
@@ -393,10 +453,10 @@ async function getCafeById(cafeId) {
     }
 }
 
-async function sendCafeInfo(cafe, chatId) {
-    const message = `<b>${cafe.name}</b>` + 
-                    `\n\n<b>Address:</b> ${cafe.address}📍` + 
-                    `\n\n<b>Rating:</b> ${cafe.rating || '-'} ⭐`;
+async function sendPlaceInfo(place, chatId) {
+    const message = `<b>${place.name}</b>` + 
+                    `\n\n<b>Address:</b> ${place.address}📍` + 
+                    `\n\n<b>Rating:</b> ${place.rating || '-'} ⭐`;
                 
     await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
 }

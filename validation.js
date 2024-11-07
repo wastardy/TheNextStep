@@ -16,16 +16,16 @@ async function isValidStreetInput(city, street) {
 
         if (response.data.status === 'OK') {
             const result = response.data.results[0];
-            console.log('========> Address found: ', result.formatted_address);
+            console.log('--------> Address found: ', result.formatted_address);
             return true;
         } 
         else if (response.data.status === 'ZERO_RESULTS') {
-            console.log('========> Address not found');
+            console.log('--------> Address not found');
             return false;
         }
     } 
     catch (error) {
-        console.error('========> Error with Geocoding API:', error);
+        console.error('--------> Error with Geocoding API:', error);
         return false;
     }
 }
