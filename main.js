@@ -241,12 +241,10 @@ const main = () => {
                 const placeType = userSteps[chatId].placeType;
                 // const dbModel = dbTables[userSteps[chatId].requiredTable];
                 dbModel = getRequiredTable(userSteps[chatId].requiredTable);
-                console.log(`\n\n========> Буде використано тип: ${placeType}, бд: ${userSteps[chatId].requiredTable}`);
+                console.log(`\n========> Буде використано тип: ${placeType}, бд: ${userSteps[chatId].requiredTable}`);
 
                 await searchPlacesByAddress(location, range, placeType, dbModel);
                 await sendCafeButtons(bot, chatId, 1, dbModel);
-
-                resetUserState(chatId);
             }
         }
         else {
@@ -258,6 +256,14 @@ const main = () => {
         const callbackData = callbackQuery.data;
         const chatId = callbackQuery.message.chat.id;
         const messageId = callbackQuery.message.message_id;
+        
+        // userSteps[chatId] = {
+        //     ...userSteps[chatId],
+        // };
+
+        // console.log(`========> Інформація в об'єкті юзера (callback_query): `, userSteps[chatId]);
+        
+        // dbModel = getRequiredTable(userSteps[chatId]?.requiredTable);
     
         if (callbackData === 'set_default_range') {
             await handleSetDefaultRange(chatId, userSteps);
@@ -270,7 +276,7 @@ const main = () => {
             await updateCafeButtons(bot, chatId, page, messageId, dbModel);
         }
         else {
-            await handleCafeSelection(chatId, callbackData);
+            await handleCafeSelection(chatId, callbackData, dbModel);
         }
     });
 };
@@ -313,9 +319,9 @@ async function handleSetDefaultRange(chatId, userSteps) {
     resetUserState(chatId);
 }
 
-async function handleCafeSelection(chatId, placeId) {
+async function handleCafeSelection(chatId, placeId, requiredTable) {
     try {
-        const place = await getPlaceById(placeId);
+        const place = await getPlaceById(placeId, requiredTable);
 
         if (place) {
             await sendPlaceInfo(place, chatId);
@@ -323,6 +329,7 @@ async function handleCafeSelection(chatId, placeId) {
         } 
         else {
             await bot.sendMessage(chatId, 'Place not found 😶');
+            console.log(`--------> ${place.name} not found`);
         }
     } 
     catch (error) {
@@ -362,7 +369,7 @@ async function findPlaces(latitude, longitude, radius, placeType, requiredTable)
     const placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
 
     try {
-        console.log('-------->', placeType);
+        console.log('--------> Тип місць для пошуку:', placeType);
 
         const response = await axios.get(placesUrl, {
             params: {
@@ -386,13 +393,13 @@ async function findPlaces(latitude, longitude, radius, placeType, requiredTable)
                 console.log(`Name: ${place.name}, Address: ${place.vicinity}, Rating: ${place.rating}`);
             });
 
-            console.log('---- потрібна таблиця бд ---->', requiredTable);
+            console.log('\n-------> потрібна таблиця бд:', requiredTable);
             // await requiredTable.deleteMany({});
 
             await savePlacesToDB(places, requiredTable);
         }
         else {
-            console.error(`-------> findPlaces() ${params.type} search error: `, response.data.status);
+            console.error(`-------> findPlaces() ${placeType} search error: `, response.data.status);
         }
     }
     catch (error) {
@@ -402,6 +409,9 @@ async function findPlaces(latitude, longitude, radius, placeType, requiredTable)
 
 async function savePlacesToDB(places, requiredTable) {
     try {
+        await requiredTable.deleteMany({});
+        console.log(`-------> Очищено всі попередні дані з ${requiredTable.collectionName}`);
+        
         const placeDocs = places.map((place) => ({
             name: place.name,
             address: place.vicinity,
@@ -421,17 +431,6 @@ async function savePlacesToDB(places, requiredTable) {
     }
 }
 
-async function getPlacesFromDB() {
-    try {
-        const places = await Model.find();
-        return places || [];
-    }
-    catch (error) {
-        console.error('======> Error fetching places getPlacesFromDB():', error);
-        return []; 
-    }
-}
-
 async function searchPlacesByAddress(address, radius, placeType, requiredTable) {
     await connectDB();
 
@@ -444,10 +443,10 @@ async function searchPlacesByAddress(address, radius, placeType, requiredTable) 
     }
 }
 
-async function getCafeById(cafeId) {
+async function getPlaceById(placeId, requiredTable) {
     try {
-        const cafe = await Cafe.findById(cafeId);
-        return cafe;
+        const place = await requiredTable.findById(placeId);
+        return place;
     }
     catch (error) {
         console.error('========> Error getting cafe: ', error.message);
@@ -463,18 +462,8 @@ async function sendPlaceInfo(place, chatId) {
     await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
 }
 
-async function sendMapImageUrl(cafe, chatId) {
-    const { location } = cafe;
-    const latitude = location.lat;
-    const longitude = location.lng;
-
-    const imageUrl = `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
-    
-    await bot.sendPhoto(chatId, imageUrl);
-}
-
-async function sendMapLink(cafe, chatId) {
-    const { location } = cafe;
+async function sendMapLink(place, chatId) {
+    const { location } = place;
     const latitude = location.lat;
     const longitude = location.lng;
 
@@ -482,7 +471,7 @@ async function sendMapLink(cafe, chatId) {
     
     await bot.sendMessage(
         chatId, 
-        `Here is the map to [${cafe.name}](${mapUrl})`, 
+        `Here is the map to [${place.name}](${mapUrl})`, 
         { parse_mode: 'Markdown' }
     );  
 }
