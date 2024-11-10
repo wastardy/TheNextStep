@@ -11,6 +11,6 @@ const spaSchema = new mongoose.Schema({
     place_id: String,
 });
 
-const Spa = mongoose.model('dynamic_spa', spaSchema);
+const Spa = mongoose.model('dynamic_spas', spaSchema);
 
 module.exports = Spa;

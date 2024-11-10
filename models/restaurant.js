@@ -11,6 +11,6 @@ const restaurantSchema = new mongoose.Schema({
     place_id: String,
 });
 
-const Restaurant = mongoose.model('dynamic_restaurant', restaurantSchema);
+const Restaurant = mongoose.model('dynamic_restaurants', restaurantSchema);
 
 module.exports = Restaurant;

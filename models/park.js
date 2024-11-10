@@ -11,6 +11,6 @@ const parkSchema = new mongoose.Schema({
     place_id: String,
 });
 
-const Park = mongoose.model('dynamic_park', parkSchema);
+const Park = mongoose.model('dynamic_parks', parkSchema);
 
 module.exports = Park;

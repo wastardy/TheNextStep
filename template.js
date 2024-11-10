@@ -98,6 +98,15 @@ const requestLocation = (chatId) => {
     ├── package.json
     └── token.js
 */
+// ================================ ?????????????????????????????????????????
+function handleInitialButtonClick(chatId, buttonName, userSteps) {
+    if (dbTables[buttonName]) {
+        userSteps[chatId] = {
+            ...userSteps[chatId],
+            requiredTable: buttonName,
+        };
+    }
+}
 
 async function sendWebsiteButton(chatId) {
     try {

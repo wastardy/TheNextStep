@@ -22,9 +22,9 @@ const connectDB = require('./db.js')
 const Cafe = require('./models/cafe.js');
 const Gym = require('./models/gym.js');
 const Park = require('./models/park.js');
-const Restaurant = require('./models/restaurant.js');
+// const Restaurant = require('./models/restaurant.js');
 const Spa = require('./models/spa.js');
-const MovieTheater = require('./models/movie_theater.js');
+// const MovieTheater = require('./models/movie_theater.js');
 
 // const models = {
 //     cafe: Cafe,
@@ -46,33 +46,28 @@ const categories = {
     'Cafe': 'cafe', 
     'Gym': 'gym', 
     'Park': 'park', 
-    'Restaurant': 'restaurant',
     'Spa': 'spa',
-    'Movie Theater': 'movie_theater',
 };
+// 'Restaurant': 'restaurant',
+// 'Movie Theater': 'movie_theater',
 
 const dbTables = {
-    Cafe: Cafe,
-    Gym: Gym,
-    Park: Park,
-    Restaurant: Restaurant,
-    Spa: Spa,
-    MovieTheater: MovieTheater,
+    Cafe,
+    Gym,
+    Park,
+    Spa,
 };
+// Restaurant: Restaurant,
+// MovieTheater: MovieTheater,
 
-function handleInitialButtonClick(chatId, buttonName, userSteps) {
-    if (dbTables[buttonName]) {
-        userSteps[chatId] = {
-            ...userSteps[chatId],
-            requiredTable: buttonName,
-        };
-    }
+// ========================================================== RIGHT WAY!!!!!!
+function getRequiredTable(requiredTable) {
+    return dbTables[requiredTable] || null;
 }
 
 let currentMessageId = '';
 let slectedCategoryDB = '';
-
-
+let dbModel;
 
 const main = () => {
     bot.setMyCommands([
@@ -116,7 +111,7 @@ const main = () => {
             }; 
             
             console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId]);
-            console.log('---------------------------------------\n')
+            console.log('----------------------------------------------------- Категорія\n')
 
             await bot.sendMessage(
                 chatId, 
@@ -157,7 +152,7 @@ const main = () => {
                 };
     
                 console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId]);
-                console.log('---------------------------------------\n\n');
+                console.log('----------------------------------------------------- Місто\n\n');
 
                 await bot.sendMessage(
                     chatId, 
@@ -201,7 +196,7 @@ const main = () => {
                 };
 
                 console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId]);
-                console.log('---------------------------------------\n');
+                console.log('----------------------------------------------------- Вулиця\n');
 
                 await bot.sendMessage(
                     chatId, 
@@ -234,7 +229,7 @@ const main = () => {
                 };
 
                 console.log(`========> Інформація в об'єкті юзера: `, userSteps[chatId]);
-                console.log('---------------------------------------\n\n');
+                console.log('----------------------------------------------------- Діапазон\n\n');
 
                 await bot.sendMessage(
                     chatId, 
@@ -244,10 +239,12 @@ const main = () => {
                 );
 
                 const placeType = userSteps[chatId].placeType;
-                const requiredTable = userSteps[chatId].requiredTable;
+                // const dbModel = dbTables[userSteps[chatId].requiredTable];
+                dbModel = getRequiredTable(userSteps[chatId].requiredTable);
+                console.log(`\n\n========> Буде використано тип: ${placeType}, бд: ${userSteps[chatId].requiredTable}`);
 
-                await searchPlacesByAddress(location, range, placeType, requiredTable);
-                await sendCafeButtons(bot, chatId, 1);
+                await searchPlacesByAddress(location, range, placeType, dbModel);
+                await sendCafeButtons(bot, chatId, 1, dbModel);
 
                 resetUserState(chatId);
             }
@@ -270,7 +267,7 @@ const main = () => {
         }
         else if (callbackData.startsWith('page_')) {
             const page = parseInt(callbackData.split('_')[1], 10);
-            await updateCafeButtons(bot, chatId, page, messageId);
+            await updateCafeButtons(bot, chatId, page, messageId, dbModel);
         }
         else {
             await handleCafeSelection(chatId, callbackData);
@@ -351,20 +348,22 @@ async function getCoordinates(address) {
             return location;
         }
         else {
-            console.error('Coordinates could not be found: ', response.data.status);
+            console.error('--------> getCoordinates() Coordinates could not be found: ', response.data.status);
             return null;
         }
     }
     catch (error) {
-        console.error('========> Geocoding API Error: ', error.message);
+        console.error('--------> getCoordinates() Geocoding API Error: ', error.message);
         return null;
     }
 }
 
-async function findPlaces(latitude, longitude, radius, placeType, model) {
+async function findPlaces(latitude, longitude, radius, placeType, requiredTable) {
     const placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
 
     try {
+        console.log('-------->', placeType);
+
         const response = await axios.get(placesUrl, {
             params: {
                 location: `${latitude},${longitude}`,
@@ -377,8 +376,8 @@ async function findPlaces(latitude, longitude, radius, placeType, model) {
         if (response.data.status === 'OK') {
             const places = response.data.results;
 
-            if (!model) {
-                console.log(`-------> Invalid datatable type -> ${model}`);
+            if (!requiredTable) {
+                console.log(`-------> findPlaces() Invalid datatable type -> ${requiredTable}`);
                 return;
             }
 
@@ -387,32 +386,35 @@ async function findPlaces(latitude, longitude, radius, placeType, model) {
                 console.log(`Name: ${place.name}, Address: ${place.vicinity}, Rating: ${place.rating}`);
             });
 
-            await model.deleteMany({});
+            console.log('---- потрібна таблиця бд ---->', requiredTable);
+            // await requiredTable.deleteMany({});
 
-            await savePlacesToDB(places, model);
+            await savePlacesToDB(places, requiredTable);
         }
         else {
-            console.error(`-------> ${placeType} search error: `, response.data.status);
+            console.error(`-------> findPlaces() ${params.type} search error: `, response.data.status);
         }
     }
     catch (error) {
-        console.error('-------> Places API Error: ', error.message);
+        console.error('-------> findPlaces() Places API Error: ', error.message);
     }
 }
 
-async function savePlacesToDB(places, Model) {
+async function savePlacesToDB(places, requiredTable) {
     try {
         const placeDocs = places.map((place) => ({
             name: place.name,
             address: place.vicinity,
-            rating: place.rating || 0,
+            rating: place.rating ?? 0,
             location: place.geometry.location,
             place_id: place.place_id,
         }));
 
-        await Model.insertMany(placeDocs);
+        console.log('-------> savePlacesToDB() Записую дані в ', requiredTable);
+
+        await requiredTable.insertMany(placeDocs);
         
-        console.log(`-------> Places successfully saved to ${Model} table`);
+        console.log(`-------> Places successfully saved to table`);
     }
     catch (error) {
         console.error(`-------> Error saving ${placeType}s to database: `, error.message);
@@ -430,15 +432,15 @@ async function getPlacesFromDB() {
     }
 }
 
-async function searchPlacesByAddress(address, radius, placeType, model) {
+async function searchPlacesByAddress(address, radius, placeType, requiredTable) {
     await connectDB();
 
     const coordinates = await getCoordinates(address);
     if (coordinates) {
-        await findPlaces(coordinates.lat, coordinates.lng, radius, placeType, model);
+        await findPlaces(coordinates.lat, coordinates.lng, radius, placeType, requiredTable);
     }
     else {
-        console.log('=========> Could not find place due to an error in the address.');
+        console.log('--------> searchPlacesByAddress() Could not find place due to an error in the address.');
     }
 }
 
@@ -490,8 +492,8 @@ async function initialChoice(chatId) {
         reply_markup: {
             keyboard: [
                 ['Cafe', 'Gym'],
-                ['Park', 'Restaurant'],
-                ['Spa', 'Movie Theater'],
+                ['Park', 'Spa'],
+                // ['Restaurant', 'Movie Theater'],
             ],
             resize_keyboard: true,
             one_time_keyboard: true

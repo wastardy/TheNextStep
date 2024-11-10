@@ -11,6 +11,6 @@ const movieTheaterSchema = new mongoose.Schema({
     place_id: String,
 });
 
-const MovieTheater = mongoose.model('dynamic_movie_theater', movieTheaterSchema);
+const MovieTheater = mongoose.model('dynamic_movie_theaters', movieTheaterSchema);
 
 module.exports = MovieTheater;

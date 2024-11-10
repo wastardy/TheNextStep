@@ -1,12 +1,10 @@
-const Cafe = require('./models/cafe.js');
-
-async function getCafesFromDB() {
+async function getPlacesFromDB(requiredTable) {
     try {
-        const cafes = await Cafe.find();
-        return cafes || [];
+        const places = await requiredTable.find();
+        return places || [];
     }
     catch (error) {
-        console.error('======> Error fetching cafes getCafesFromDB():', error);
+        console.error('======> Error fetching places getPlacesFromDB():', error);
         return []; 
     }
 }
@@ -32,29 +30,29 @@ async function sendWebsiteButton(bot, chatId) {
     }
 }
 
-async function sendCafeButtons(bot, chatId, page = 1) {
+async function sendCafeButtons(bot, chatId, page = 1, requiredTable) {
     const placesPerPage = 5;
 
     try {
-        const cafes = await getCafesFromDB();
+        const places = await getPlacesFromDB(requiredTable);
 
-        if (!Array.isArray(cafes)) {
-            console.error('Received data is not an array:', cafes);
-            return await bot.sendMessage(chatId, 'Error retrieving cafes');
+        if (!Array.isArray(places)) {
+            console.error('Received data is not an array:', places);
+            return await bot.sendMessage(chatId, 'Error retrieving places from database');
         }
 
-        if (cafes.length === 0) {
-            return await bot.sendMessage(chatId, 'Cafes not found 🥲'); 
+        if (places.length === 0) {
+            return await bot.sendMessage(chatId, 'No places in your range🥲'); 
         }
 
         // calculate start and end indexes for current page
         const startIndex = (page - 1) * placesPerPage;
         const endIndex = startIndex + placesPerPage;
-        const pagePlaces = cafes.slice(startIndex, endIndex);
+        const pagePlaces = places.slice(startIndex, endIndex);
 
         // creating buttons
-        const cafeButtons = pagePlaces.map((cafe) => [
-            { text: cafe.name, callback_data: cafe._id.toString() }
+        const placeButtons = pagePlaces.map((place) => [
+            { text: place.name, callback_data: place._id.toString() }
         ]);
 
         // navigation buttons
@@ -62,15 +60,15 @@ async function sendCafeButtons(bot, chatId, page = 1) {
         if (page > 1) {
             navigationButtons.push({ text: '⏮️ Previous', callback_data: `page_${page - 1}` });
         }
-        if (endIndex < cafes.length) {
+        if (endIndex < places.length) {
             navigationButtons.push({ text: 'Next ⏭️', callback_data: `page_${page + 1}` });
         }
         if (navigationButtons.length > 0) {
-            cafeButtons.push(navigationButtons); // add arrows for current page
+            placeButtons.push(navigationButtons); // add arrows for current page
         }
 
-        const message = await bot.sendMessage(chatId, 'Choose cafe:', {
-            reply_markup: { inline_keyboard: cafeButtons }
+        const message = await bot.sendMessage(chatId, 'Choose place:', {
+            reply_markup: { inline_keyboard: placeButtons }
         });
 
         sendWebsiteButton(bot, chatId);
@@ -78,29 +76,29 @@ async function sendCafeButtons(bot, chatId, page = 1) {
         currentMessageId = message.message_id;
     }
     catch (error) {
-        console.error('========> Error retrieving cafe from database: ', error.message);
-        bot.sendMessage(chatId, 'Error retrieving cafe from database');
+        console.error(`========> Error retrieving ${places} from database: `, error.message);
+        bot.sendMessage(chatId, `Error retrieving ${places} from database`);
     }
 }
 
-async function updateCafeButtons(bot, chatId, page, messageId) {
+async function updateCafeButtons(bot, chatId, page, messageId, requiredTable) {
     const placesPerPage = 5;
 
     try {
-        const cafes = await getCafesFromDB();
+        const places = await getPlacesFromDB(requiredTable);
 
-        if (cafes.length === 0) {
-            return await bot.sendMessage(chatId, 'Cafes not found 🥲'); 
+        if (places.length === 0) {
+            return await bot.sendMessage(chatId, 'No places in your range🥲'); 
         }
 
         // calculate start and end indexes for current page
         const startIndex = (page - 1) * placesPerPage;
         const endIndex = startIndex + placesPerPage;
-        const pagePlaces = cafes.slice(startIndex, endIndex);
+        const pagePlaces = places.slice(startIndex, endIndex);
 
         // creating buttons
-        const cafeButtons = pagePlaces.map((cafe) => [
-            { text: cafe.name, callback_data: cafe._id.toString() }
+        const placeButtons = pagePlaces.map((place) => [
+            { text: place.name, callback_data: place._id.toString() }
         ]);
 
         // navigation buttons
@@ -108,21 +106,21 @@ async function updateCafeButtons(bot, chatId, page, messageId) {
         if (page > 1) {
             navigationButtons.push({ text: '⏮️ Previous', callback_data: `page_${page - 1}` });
         }
-        if (endIndex < cafes.length) {
+        if (endIndex < places.length) {
             navigationButtons.push({ text: 'Next ⏭️', callback_data: `page_${page + 1}` });
         }
         if (navigationButtons.length > 0) {
-            cafeButtons.push(navigationButtons); // add arrows for current page
+            placeButtons.push(navigationButtons); // add arrows for current page
         }
 
         // update buttons in existing message
         await bot.editMessageReplyMarkup(
-            { inline_keyboard: cafeButtons },
+            { inline_keyboard: placeButtons },
             { chat_id: chatId, message_id: messageId }
         );
     }
     catch (error) {
-        console.error('========> Error updating cafe buttons: ', error.message);
+        console.error('========> Error updating places buttons: ', error.message);
     }
 }
 
