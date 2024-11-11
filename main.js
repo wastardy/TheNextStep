@@ -13,8 +13,8 @@ const {
 } = require('./validation.js');
 
 const {  
-    sendCafeButtons, 
-    updateCafeButtons, 
+    sendPlacesButtons, 
+    updatePlacesButtons, 
     sendRangeSelectionButtons 
 } = require('./inline_buttons.js');
 
@@ -22,18 +22,7 @@ const connectDB = require('./db.js')
 const Cafe = require('./models/cafe.js');
 const Gym = require('./models/gym.js');
 const Park = require('./models/park.js');
-// const Restaurant = require('./models/restaurant.js');
 const Spa = require('./models/spa.js');
-// const MovieTheater = require('./models/movie_theater.js');
-
-// const models = {
-//     cafe: Cafe,
-//     gym: Gym,
-//     park: Park,
-//     restaurant: Restaurant,
-//     spa: Spa,
-//     movie_theater: MovieTheater,
-// };
 
 const bot = new telegramAPI(token, { polling: true });
 
@@ -48,8 +37,6 @@ const categories = {
     'Park': 'park', 
     'Spa': 'spa',
 };
-// 'Restaurant': 'restaurant',
-// 'Movie Theater': 'movie_theater',
 
 const dbTables = {
     Cafe,
@@ -57,13 +44,6 @@ const dbTables = {
     Park,
     Spa,
 };
-// Restaurant: Restaurant,
-// MovieTheater: MovieTheater,
-
-// ========================================================== RIGHT WAY!!!!!!
-function getRequiredTable(requiredTable) {
-    return dbTables[requiredTable] || null;
-}
 
 let currentMessageId = '';
 let slectedCategoryDB = '';
@@ -244,7 +224,7 @@ const main = () => {
                 console.log(`\n========> Буде використано тип: ${placeType}, бд: ${userSteps[chatId].requiredTable}`);
 
                 await searchPlacesByAddress(location, range, placeType, dbModel);
-                await sendCafeButtons(bot, chatId, 1, dbModel);
+                await sendPlacesButtons(bot, chatId, 1, dbModel);
             }
         }
         else {
@@ -257,6 +237,8 @@ const main = () => {
         const chatId = callbackQuery.message.chat.id;
         const messageId = callbackQuery.message.message_id;
         
+        const placeType = userSteps[chatId].placeType;
+        dbModel = getRequiredTable(userSteps[chatId].requiredTable);
         // userSteps[chatId] = {
         //     ...userSteps[chatId],
         // };
@@ -266,17 +248,17 @@ const main = () => {
         // dbModel = getRequiredTable(userSteps[chatId]?.requiredTable);
     
         if (callbackData === 'set_default_range') {
-            await handleSetDefaultRange(chatId, userSteps);
+            await handleSetDefaultRange(chatId, placeType, dbModel);
         }
         else if (callbackData === 'enter_range_again') {
             await handleEnterRangeAgain(chatId);
         }
         else if (callbackData.startsWith('page_')) {
             const page = parseInt(callbackData.split('_')[1], 10);
-            await updateCafeButtons(bot, chatId, page, messageId, dbModel);
+            await updatePlacesButtons(bot, chatId, page, messageId, dbModel);
         }
         else {
-            await handleCafeSelection(chatId, callbackData, dbModel);
+            await handlePlaceSelection(chatId, callbackData, dbModel);
         }
     });
 };
@@ -291,7 +273,11 @@ async function handleEnterRangeAgain(chatId) {
     );
 }
 
-async function handleSetDefaultRange(chatId, userSteps) {
+async function handleSetDefaultRange(chatId, placeType, requiredTable) {
+    userSteps[chatId] = {
+        ...userSteps[chatId],
+    };
+
     userSteps[chatId].range = defaultRange;
 
     await bot.sendMessage(
@@ -304,22 +290,22 @@ async function handleSetDefaultRange(chatId, userSteps) {
     
     const location = userSteps[chatId].location;
     const range = userSteps[chatId].range;
-    const placeType = userSteps[chatId].placeType;
-    const requiredTable = userSteps[chatId].requiredTable;
+
+    console.log('\n\n========> 290 handleSetDefaultRange() передана таблиця:', requiredTable);
 
     await bot.sendMessage(
         chatId, 
-        `Searching ${selectedCategory}'s around <b>'${location}'</b> within a <b>${range} m</b> radius... 🔍`,
+        `Searching ${placeType}'s around <b>'${location}'</b> within a <b>${range} m</b> radius... 🔍`,
         { parse_mode: "HTML"}    
     );
 
     await searchPlacesByAddress(location, range, placeType, requiredTable);
-    await sendCafeButtons(chatId, 1);
+    await sendPlacesButtons(bot, chatId, 1, requiredTable);
 
-    resetUserState(chatId);
+    // resetUserState(chatId);
 }
 
-async function handleCafeSelection(chatId, placeId, requiredTable) {
+async function handlePlaceSelection(chatId, placeId, requiredTable) {
     try {
         const place = await getPlaceById(placeId, requiredTable);
 
@@ -384,7 +370,7 @@ async function findPlaces(latitude, longitude, radius, placeType, requiredTable)
             const places = response.data.results;
 
             if (!requiredTable) {
-                console.log(`-------> findPlaces() Invalid datatable type -> ${requiredTable}`);
+                console.log(`--------> findPlaces() Invalid datatable type -> ${requiredTable}`);
                 return;
             }
 
@@ -410,7 +396,7 @@ async function findPlaces(latitude, longitude, radius, placeType, requiredTable)
 async function savePlacesToDB(places, requiredTable) {
     try {
         await requiredTable.deleteMany({});
-        console.log(`-------> Очищено всі попередні дані з ${requiredTable.collectionName}`);
+        console.log(`-------> Очищено всі попередні дані з ${requiredTable.name}`);
         
         const placeDocs = places.map((place) => ({
             name: place.name,
@@ -474,6 +460,10 @@ async function sendMapLink(place, chatId) {
         `Here is the map to [${place.name}](${mapUrl})`, 
         { parse_mode: 'Markdown' }
     );  
+}
+
+function getRequiredTable(requiredTable) {
+    return dbTables[requiredTable] || null;
 }
 
 async function initialChoice(chatId) {

@@ -30,7 +30,7 @@ async function sendWebsiteButton(bot, chatId) {
     }
 }
 
-async function sendCafeButtons(bot, chatId, page = 1, requiredTable) {
+async function sendPlacesButtons(bot, chatId, page = 1, requiredTable) {
     const placesPerPage = 5;
 
     try {
@@ -81,7 +81,7 @@ async function sendCafeButtons(bot, chatId, page = 1, requiredTable) {
     }
 }
 
-async function updateCafeButtons(bot, chatId, page, messageId, requiredTable) {
+async function updatePlacesButtons(bot, chatId, page, messageId, requiredTable) {
     const placesPerPage = 5;
 
     try {
@@ -137,7 +137,7 @@ async function sendRangeSelectionButtons(bot, chatId) {
 
 module.exports = {
     sendWebsiteButton, 
-    sendCafeButtons,
-    updateCafeButtons,
+    sendPlacesButtons,
+    updatePlacesButtons,
     sendRangeSelectionButtons,
 };
