@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const cafeSchema = new mongoose.Schema({
+    photo_url: String,
     name: String,
     address: String,
     rating: Number,

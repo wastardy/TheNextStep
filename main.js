@@ -398,13 +398,31 @@ async function savePlacesToDB(places, requiredTable) {
         await requiredTable.deleteMany({});
         console.log(`-------> Очищено всі попередні дані з ${requiredTable.name}`);
         
-        const placeDocs = places.map((place) => ({
-            name: place.name,
-            address: place.vicinity,
-            rating: place.rating ?? 0,
-            location: place.geometry.location,
-            place_id: place.place_id,
+        const placeDocs = await Promise.all(places.map(async (place) => {
+            let photoURL = '';
+
+            if (place.photos && place.photos.length > 0) {
+                const photoReference = place.photos[0].photo_reference;
+                photoURL = getPhotoUrl(photoReference);
+            }
+
+            return {
+                photo_url: photoURL, 
+                name: place.name,
+                address: place.vicinity,
+                rating: place.rating ?? 0,
+                location: place.geometry.location,
+                place_id: place.place_id,
+            };
         }));
+
+        // const placeDocs = places.map((place) => ({
+        //     name: place.name,
+        //     address: place.vicinity,
+        //     rating: place.rating ?? 0,
+        //     location: place.geometry.location,
+        //     place_id: place.place_id,
+        // }));
 
         console.log('-------> savePlacesToDB() Записую дані в ', requiredTable);
 
@@ -415,6 +433,11 @@ async function savePlacesToDB(places, requiredTable) {
     catch (error) {
         console.error(`-------> Error saving ${placeType}s to database: `, error.message);
     }
+}
+
+// Функція для формування URL фото за photo_reference
+function getPhotoUrl(photoReference) {
+    return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=${photoReference}&key=${GOOGLE_API_KEY}`;
 }
 
 async function searchPlacesByAddress(address, radius, placeType, requiredTable) {

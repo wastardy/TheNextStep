@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 
 const parkSchema = new mongoose.Schema({
+    photo_url: String,
     name: String, 
     address: String,
     rating: Number,
