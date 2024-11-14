@@ -221,10 +221,12 @@ const main = () => {
                 const placeType = userSteps[chatId].placeType;
                 // const dbModel = dbTables[userSteps[chatId].requiredTable];
                 dbModel = getRequiredTable(userSteps[chatId].requiredTable);
+                requiredTableForUrl = userSteps[chatId].requiredTable;
+
                 console.log(`\n========> Буде використано тип: ${placeType}, бд: ${userSteps[chatId].requiredTable}`);
 
                 await searchPlacesByAddress(location, range, placeType, dbModel);
-                await sendPlacesButtons(bot, chatId, 1, dbModel);
+                await sendPlacesButtons(bot, chatId, 1, dbModel, requiredTableForUrl);
             }
         }
         else {
@@ -239,6 +241,7 @@ const main = () => {
         
         const placeType = userSteps[chatId].placeType;
         dbModel = getRequiredTable(userSteps[chatId].requiredTable);
+        requiredTableForUrl = userSteps[chatId].requiredTable;
         // userSteps[chatId] = {
         //     ...userSteps[chatId],
         // };
@@ -248,7 +251,7 @@ const main = () => {
         // dbModel = getRequiredTable(userSteps[chatId]?.requiredTable);
     
         if (callbackData === 'set_default_range') {
-            await handleSetDefaultRange(chatId, placeType, dbModel);
+            await handleSetDefaultRange(chatId, placeType, dbModel, requiredTableForUrl);
         }
         else if (callbackData === 'enter_range_again') {
             await handleEnterRangeAgain(chatId);
@@ -273,7 +276,7 @@ async function handleEnterRangeAgain(chatId) {
     );
 }
 
-async function handleSetDefaultRange(chatId, placeType, requiredTable) {
+async function handleSetDefaultRange(chatId, placeType, requiredTable, requiredTableForUrl) {
     userSteps[chatId] = {
         ...userSteps[chatId],
     };
@@ -300,7 +303,7 @@ async function handleSetDefaultRange(chatId, placeType, requiredTable) {
     );
 
     await searchPlacesByAddress(location, range, placeType, requiredTable);
-    await sendPlacesButtons(bot, chatId, 1, requiredTable);
+    await sendPlacesButtons(bot, chatId, 1, requiredTable, requiredTableForUrl);
 
     // resetUserState(chatId);
 }

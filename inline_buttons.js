@@ -11,6 +11,7 @@ async function getPlacesFromDB(requiredTable) {
 
 async function sendWebsiteButton(bot, chatId, requiredTable) {
     try {
+        console.log('\n--------> ТИП, ЯКИЙ ПЕРЕДАЄТЬСЯ В URL:', requiredTable, '\n');
         bot.sendMessage(chatId, 'Better overview of places:', {
             reply_markup: {
                 inline_keyboard: [
@@ -30,7 +31,7 @@ async function sendWebsiteButton(bot, chatId, requiredTable) {
     }
 }
 
-async function sendPlacesButtons(bot, chatId, page = 1, requiredTable) {
+async function sendPlacesButtons(bot, chatId, page = 1, requiredTable, requiredTableForUrl) {
     const placesPerPage = 5;
 
     try {
@@ -71,7 +72,7 @@ async function sendPlacesButtons(bot, chatId, page = 1, requiredTable) {
             reply_markup: { inline_keyboard: placeButtons }
         });
 
-        sendWebsiteButton(bot, chatId, requiredTable);
+        sendWebsiteButton(bot, chatId, requiredTableForUrl);
 
         currentMessageId = message.message_id;
     }
