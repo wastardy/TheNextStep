@@ -4,6 +4,7 @@ node_modules/
 # confidential files with tokens and keys
 token.js
 google_api_key.js
+mongodb_password.js
 
 # other
 template.js
