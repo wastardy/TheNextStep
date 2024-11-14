@@ -9,7 +9,7 @@ async function getPlacesFromDB(requiredTable) {
     }
 }
 
-async function sendWebsiteButton(bot, chatId) {
+async function sendWebsiteButton(bot, chatId, requiredTable) {
     try {
         bot.sendMessage(chatId, 'Better overview of places:', {
             reply_markup: {
@@ -17,7 +17,7 @@ async function sendWebsiteButton(bot, chatId) {
                     [
                         { 
                             text: 'Open the web page🎴', 
-                            url: 'https://flariii.github.io/TheNextStep_website/' 
+                            url: `https://flariii.github.io/TheNextStep_website/?type=${requiredTable}` 
                         }
                     ]
                 ]
@@ -71,7 +71,7 @@ async function sendPlacesButtons(bot, chatId, page = 1, requiredTable) {
             reply_markup: { inline_keyboard: placeButtons }
         });
 
-        sendWebsiteButton(bot, chatId);
+        sendWebsiteButton(bot, chatId, requiredTable);
 
         currentMessageId = message.message_id;
     }
