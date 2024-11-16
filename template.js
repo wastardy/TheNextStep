@@ -1,18 +1,26 @@
-/* запит на локацію
-const requestLocation = (chatId) => {
-    const options = {
-        reply_markup: {
-            keyboard: [
-                [{ text: "Send Location 📍", request_location: true }]
-            ],
-            resize_keyboard: true,
-            one_time_keyboard: true,
-        }
-    };
-    bot.sendMessage(chatId, "Please share your location:", options);
-};
+places.forEach((place) => {
+    if (place.opening_hours) {
+        console.log(`Opening hours found for ${place.name}`);
+        console.log('opening ours містить:', place.opening_hours);
+        // Перебір всіх ключів об'єкта place.opening_hours
+        // console.log(Object.keys(place.opening_hours));
+        var keys = [];
+        // Перебираємо всі ключі об'єкта place.opening_hours
+        Object.keys(place.opening_hours).forEach((key) => {
+            if (keys.indexOf(key) === -1) {
+                keys.push(key); // Додаємо ключ до масиву, якщо він ще не доданий
+            }
+        });
+        console.log(keys);
+    } 
+    else {
+        console.log(`No opening hours for ${place.name}`);
+    }
+});
 
-*/
+console.log('\n\n\n');
+const dayIndex = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
+
 
 /* // Схема для збереження кафе
 
@@ -68,17 +76,6 @@ const requestLocation = (chatId) => {
 
 // app.get('/', (req, res) => res.send('Bot is running'));
 // app.listen(3000, () => console.log('Server is running at http://localhost:3000'))
-
-
-
-
-// -----------------------------------!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-// одиниці вимірювання відстані (м)
-// звідки береться центр точки
-// список виведення кнопок
-// якщо вибираєш вулицю і не вказуєш місто
-
-
 
 
 /*

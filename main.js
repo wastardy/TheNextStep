@@ -239,16 +239,14 @@ const main = () => {
         const chatId = callbackQuery.message.chat.id;
         const messageId = callbackQuery.message.message_id;
         
-        const placeType = userSteps[chatId].placeType;
-        dbModel = getRequiredTable(userSteps[chatId].requiredTable);
-        requiredTableForUrl = userSteps[chatId].requiredTable;
-        // userSteps[chatId] = {
-        //     ...userSteps[chatId],
-        // };
+        userSteps[chatId] = {
+            ...userSteps[chatId],
+        };
+        console.log(`========> Інформація в об'єкті юзера (callback_query): `, userSteps[chatId]);
 
-        // console.log(`========> Інформація в об'єкті юзера (callback_query): `, userSteps[chatId]);
-        
-        // dbModel = getRequiredTable(userSteps[chatId]?.requiredTable);
+        const placeType = userSteps[chatId]?.placeType;
+        dbModel = getRequiredTable(userSteps[chatId]?.requiredTable);
+        requiredTableForUrl = userSteps[chatId]?.requiredTable;
     
         if (callbackData === 'set_default_range') {
             await handleSetDefaultRange(chatId, placeType, dbModel, requiredTableForUrl);
@@ -369,6 +367,8 @@ async function findPlaces(latitude, longitude, radius, placeType, requiredTable)
             },
         });
 
+        // console.log('===========================> response data', response.data);
+
         if (response.data.status === 'OK') {
             const places = response.data.results;
 
@@ -377,13 +377,35 @@ async function findPlaces(latitude, longitude, radius, placeType, requiredTable)
                 return;
             }
 
+            // places.forEach((place) => {
+            //     if (place.opening_hours) {
+            //         console.log(`Opening hours found for ${place.name}`);
+            //         console.log('opening_hours містить:', place.opening_hours);
+            //         const keys = [];
+        
+            //         Object.keys(place.opening_hours).forEach((key) => {
+            //             if (keys.indexOf(key) === -1) {
+            //                 keys.push(key);
+            //             }
+            //         });
+
+            //         console.log(keys);
+            //     } 
+            //     else {
+            //         console.log(`No opening hours for ${place.name}`);
+            //     }
+            // });
+
             console.log(`Found ${placeType}s:`);
             places.forEach((place) => {
                 console.log(`Name: ${place.name}, Address: ${place.vicinity}, Rating: ${place.rating}`);
+                
+                const isOpen = place.opening_hours ? place.opening_hours.open_now ?? '-' : '-';
+                console.log(`Is Open: ${isOpen}`);
+                // console.log(`Is Open: ${place.opening_hours.open_now ?? '-'}`);
             });
 
             console.log('\n-------> потрібна таблиця бд:', requiredTable);
-            // await requiredTable.deleteMany({});
 
             await savePlacesToDB(places, requiredTable);
         }
@@ -413,19 +435,12 @@ async function savePlacesToDB(places, requiredTable) {
                 photo_url: photoURL, 
                 name: place.name,
                 address: place.vicinity,
+                is_open: place.opening_hours ? place.opening_hours.open_now : false,
                 rating: place.rating ?? 0,
                 location: place.geometry.location,
                 place_id: place.place_id,
             };
         }));
-
-        // const placeDocs = places.map((place) => ({
-        //     name: place.name,
-        //     address: place.vicinity,
-        //     rating: place.rating ?? 0,
-        //     location: place.geometry.location,
-        //     place_id: place.place_id,
-        // }));
 
         console.log('-------> savePlacesToDB() Записую дані в ', requiredTable);
 
@@ -461,16 +476,21 @@ async function getPlaceById(placeId, requiredTable) {
         return place;
     }
     catch (error) {
-        console.error('========> Error getting cafe: ', error.message);
+        console.error('========> Error getting place: ', error.message);
         return null;
     }
 }
 
 async function sendPlaceInfo(place, chatId) {
+    
+    let isOpen = place.is_open === true ? 'open now! ✅' : '-';
+
     const message = `<b>${place.name}</b>` + 
                     `\n\n<b>Address:</b> ${place.address}📍` + 
+                    `\n\n<b>Is open:</b> ${isOpen}` + 
                     `\n\n<b>Rating:</b> ${place.rating || '-'} ⭐`;
                 
+    // console.log('--------> sendPlaceInfo(): ', message);
     await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
 }
 
@@ -481,6 +501,7 @@ async function sendMapLink(place, chatId) {
 
     const mapUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
     
+    // console.log('--------> sendMapLink(): ', mapUrl);
     await bot.sendMessage(
         chatId, 
         `Here is the map to [${place.name}](${mapUrl})`, 
