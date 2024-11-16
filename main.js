@@ -96,8 +96,8 @@ const main = () => {
             await bot.sendMessage(
                 chatId, 
                 `You chose <b>${selectedCategory}</b>` + 
-                `\nPlease enter your city 📌` + 
-                `\n(e.g. Київ, San Francisco, Абу-Дабі)`,
+                `\nPlease enter your <b>City name</b> 📌` + 
+                `\n\n(e.g. Київ, San Francisco, Абу-Дабі)`,
                 { parse_mode: "HTML"}
             );
         }
@@ -118,8 +118,9 @@ const main = () => {
 
                 await bot.sendMessage(
                     chatId,  
-                    `\nPlease enter your city 📌` + 
-                    `\n(e.g. Київ, San Francisco, Абу-Дабі)`
+                    `\nPlease enter your <b>City name</b> 📌` + 
+                    `\n\n(e.g. Київ, San Francisco, Абу-Дабі)`,
+                    { parse_mode: "HTML"}    
                 );
             }
             else {
@@ -136,8 +137,9 @@ const main = () => {
 
                 await bot.sendMessage(
                     chatId, 
-                    `Now enter your street with number 📌` +
-                    `\n(e.g. 3 Abbey Rd., Шевченка 7)`
+                    `Now enter your <b>street with number</b> 📌` +
+                    `\n\n(e.g. 3 Abbey Rd., Шевченка 7)`,
+                    { parse_mode: "HTML"}    
                 );
             }
         }
@@ -156,13 +158,15 @@ const main = () => {
                 await bot.sendMessage(
                     chatId,
                     `Street ${street} not found in ${city}` + 
-                    `Please enter a valid street 😌`
+                    `\nor you did not specify the street number` + 
+                    `\n\nPlease enter a valid street 😌`
                 );
 
                 await bot.sendMessage(
                     chatId, 
-                    `Enter your street with number 📌` +
-                    `\n(e.g. 3 Abbey Rd., Шевченка 7)`
+                    `Enter your <b>street with number</b> 📌` +
+                    `\n\n(e.g. 3 Abbey Rd., Шевченка 7)`,
+                    { parse_mode: "HTML"}    
                 );
             }
             else {
@@ -180,7 +184,7 @@ const main = () => {
 
                 await bot.sendMessage(
                     chatId, 
-                    `Now enter the search range <b>between 50 and 5000 meters</b>` +
+                    `Now enter the <b>search range</b> <u>between 500 and 5000 meters</u>` +
                     `\n(Default is ${defaultRange} meters)`, 
                     { parse_mode: 'HTML' }
                 );
@@ -242,7 +246,7 @@ const main = () => {
         userSteps[chatId] = {
             ...userSteps[chatId],
         };
-        console.log(`========> Інформація в об'єкті юзера (callback_query): `, userSteps[chatId]);
+        // console.log(`========> Інформація в об'єкті юзера (callback_query): `, userSteps[chatId]);
 
         const placeType = userSteps[chatId]?.placeType;
         dbModel = getRequiredTable(userSteps[chatId]?.requiredTable);
@@ -270,7 +274,9 @@ main();
 async function handleEnterRangeAgain(chatId) {
     await bot.sendMessage(
         chatId,
-        'Please enter a search range between 50 and 5000 meters'
+        `Please enter the <b>search range</b> <u>between 500 and 5000 meters</u>` +
+        `\n(Default is ${defaultRange} meters)`, 
+        { parse_mode: 'HTML' }
     );
 }
 
@@ -292,7 +298,7 @@ async function handleSetDefaultRange(chatId, placeType, requiredTable, requiredT
     const location = userSteps[chatId].location;
     const range = userSteps[chatId].range;
 
-    console.log('\n\n========> 290 handleSetDefaultRange() передана таблиця:', requiredTable);
+    console.log('\n\n========> handleSetDefaultRange() передана таблиця:', requiredTable);
 
     await bot.sendMessage(
         chatId, 
@@ -369,7 +375,10 @@ async function findPlaces(latitude, longitude, radius, placeType, requiredTable)
 
         // console.log('===========================> response data', response.data);
 
-        if (response.data.status === 'OK') {
+        let responseStatus = response.data.status;
+        console.log('========> RESPONSE STATUS:', responseStatus);
+
+        if (responseStatus === 'OK') {
             const places = response.data.results;
 
             if (!requiredTable) {
@@ -402,12 +411,17 @@ async function findPlaces(latitude, longitude, radius, placeType, requiredTable)
                 
                 const isOpen = place.opening_hours ? place.opening_hours.open_now ?? '-' : '-';
                 console.log(`Is Open: ${isOpen}`);
-                // console.log(`Is Open: ${place.opening_hours.open_now ?? '-'}`);
             });
 
             console.log('\n-------> потрібна таблиця бд:', requiredTable);
 
-            await savePlacesToDB(places, requiredTable);
+            await savePlacesToDB(responseStatus, places, requiredTable);
+        }
+        else if (responseStatus === 'ZERO_RESULTS') {
+            const places = [];
+            console.error(`--------> No places found in the specified search area (ZERO_RESULTS)`);
+            await savePlacesToDB(responseStatus, places, requiredTable);
+            return;
         }
         else {
             console.error(`-------> findPlaces() ${placeType} search error: `, response.data.status);
@@ -418,35 +432,42 @@ async function findPlaces(latitude, longitude, radius, placeType, requiredTable)
     }
 }
 
-async function savePlacesToDB(places, requiredTable) {
+async function savePlacesToDB(responseStatus, places, requiredTable) {
     try {
-        await requiredTable.deleteMany({});
-        console.log(`-------> Очищено всі попередні дані з ${requiredTable.name}`);
-        
-        const placeDocs = await Promise.all(places.map(async (place) => {
-            let photoURL = '';
+        if (responseStatus === 'OK') {
+            await requiredTable.deleteMany({});
+            console.log(`-------> Очищено всі попередні дані з ${requiredTable.name}`);
+            
+            const placeDocs = await Promise.all(places.map(async (place) => {
+                let photoURL = '';
 
-            if (place.photos && place.photos.length > 0) {
-                const photoReference = place.photos[0].photo_reference;
-                photoURL = getPhotoUrl(photoReference);
-            }
+                if (place.photos && place.photos.length > 0) {
+                    const photoReference = place.photos[0].photo_reference;
+                    photoURL = getPhotoUrl(photoReference);
+                }
 
-            return {
-                photo_url: photoURL, 
-                name: place.name,
-                address: place.vicinity,
-                is_open: place.opening_hours ? place.opening_hours.open_now : false,
-                rating: place.rating ?? 0,
-                location: place.geometry.location,
-                place_id: place.place_id,
-            };
-        }));
+                return {
+                    photo_url: photoURL, 
+                    name: place.name,
+                    address: place.vicinity,
+                    is_open: place.opening_hours ? place.opening_hours.open_now : false,
+                    rating: place.rating ?? 0,
+                    location: place.geometry.location,
+                    place_id: place.place_id,
+                };
+            }));
 
-        console.log('-------> savePlacesToDB() Записую дані в ', requiredTable);
+            console.log('-------> savePlacesToDB() Записую дані в ', requiredTable);
 
-        await requiredTable.insertMany(placeDocs);
-        
-        console.log(`-------> Places successfully saved to table`);
+            await requiredTable.insertMany(placeDocs);
+            
+            console.log(`-------> Places successfully saved to table`);
+        }
+        else {
+            await requiredTable.deleteMany({});
+            console.log(`-------> else* Очищено всі попередні дані з ${requiredTable.name}`);
+            return;
+        }
     }
     catch (error) {
         console.error(`-------> Error saving ${placeType}s to database: `, error.message);

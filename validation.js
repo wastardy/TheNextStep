@@ -8,6 +8,14 @@ async function isValidCityInput(city) {
 
 async function isValidStreetInput(city, street) {
     const address = `${street}, ${city}`;
+
+    const containsNumber = /\d/;
+
+    if (!containsNumber.test(street)) {
+        console.log('--------> Введено вулицю без цифри');
+        return false;
+    }
+
     const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GOOGLE_API_KEY}`;
 
     try {
@@ -32,7 +40,7 @@ async function isValidStreetInput(city, street) {
 
 async function isValidRangeInput(range) {
     const rangePattern = /^[0-9]+$/;
-    return rangePattern.test(range) && range >= 50 && range <= 5000; 
+    return rangePattern.test(range) && range >= 500 && range <= 5000; 
 }
 
 module.exports = {

@@ -43,7 +43,9 @@ async function sendPlacesButtons(bot, chatId, page = 1, requiredTable, requiredT
         }
 
         if (places.length === 0) {
-            return await bot.sendMessage(chatId, 'No places in your range🥲'); 
+            await bot.sendMessage(chatId, 'No places in your range🥲');
+            sendRangeSelectionButtons(bot, chatId); 
+            return;
         }
 
         // calculate start and end indexes for current page
@@ -53,7 +55,7 @@ async function sendPlacesButtons(bot, chatId, page = 1, requiredTable, requiredT
 
         // creating buttons
         const placeButtons = pagePlaces.map((place) => [
-            { text: place.name, callback_data: place._id.toString() }
+            { text: `🏛️ ${place.name}`, callback_data: place._id.toString() }
         ]);
 
         // navigation buttons
@@ -89,7 +91,8 @@ async function updatePlacesButtons(bot, chatId, page, messageId, requiredTable) 
         const places = await getPlacesFromDB(requiredTable);
 
         if (places.length === 0) {
-            return await bot.sendMessage(chatId, 'No places in your range🥲'); 
+            await bot.sendMessage(chatId, 'No places in your range🥲'); 
+            sendRangeSelectionButtons(bot, chatId); 
         }
 
         // calculate start and end indexes for current page
@@ -99,7 +102,7 @@ async function updatePlacesButtons(bot, chatId, page, messageId, requiredTable) 
 
         // creating buttons
         const placeButtons = pagePlaces.map((place) => [
-            { text: place.name, callback_data: place._id.toString() }
+            { text: `🏛️ ${place.name}`, callback_data: place._id.toString() }
         ]);
 
         // navigation buttons
