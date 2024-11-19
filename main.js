@@ -386,32 +386,8 @@ async function findPlaces(latitude, longitude, radius, placeType, requiredTable)
                 return;
             }
 
-            // places.forEach((place) => {
-            //     if (place.opening_hours) {
-            //         console.log(`Opening hours found for ${place.name}`);
-            //         console.log('opening_hours містить:', place.opening_hours);
-            //         const keys = [];
-        
-            //         Object.keys(place.opening_hours).forEach((key) => {
-            //             if (keys.indexOf(key) === -1) {
-            //                 keys.push(key);
-            //             }
-            //         });
-
-            //         console.log(keys);
-            //     } 
-            //     else {
-            //         console.log(`No opening hours for ${place.name}`);
-            //     }
-            // });
-
-            console.log(`Found ${placeType}s:`);
-            places.forEach((place) => {
-                console.log(`Name: ${place.name}, Address: ${place.vicinity}, Rating: ${place.rating}`);
-                
-                const isOpen = place.opening_hours ? place.opening_hours.open_now ?? '-' : '-';
-                console.log(`Is Open: ${isOpen}`);
-            });
+            console.log(`\nFound ${placeType}s:`);
+            displayPlacesTable(places);
 
             console.log('\n-------> потрібна таблиця бд:', requiredTable);
 
@@ -456,6 +432,14 @@ async function savePlacesToDB(responseStatus, places, requiredTable) {
                     place_id: place.place_id,
                 };
             }));
+
+            console.log('-------> savePlacesToDB() Сортую дані');
+
+            placeDocs.sort((a, b) => b.rating - a.rating);
+
+            // for (const place of placeDocs) {
+            //     console.log(`Name: ${place.name} - rating: ${place.rating}`);
+            // }
 
             console.log('-------> savePlacesToDB() Записую дані в ', requiredTable);
 
@@ -552,4 +536,24 @@ async function initialChoice(chatId) {
 
 function resetUserState(chatId) {
     userSteps[chatId] = null;
+}
+
+function formatRow(columns, width) {
+    return columns.map((col, index) => col.toString().padEnd(width[index], ' ')).join(' | ');
+}
+
+function displayPlacesTable(places) {
+    const columnWidths = [40, 50, 10, 10];
+
+    console.log(formatRow(['Name', 'Address', 'Rating', 'Status'], columnWidths));
+    console.log('-'.repeat(columnWidths.reduce((a, b) => a + b + 3, 0))); // Лінія розділу
+
+    places.forEach((place) => {
+        const isOpen = place.opening_hours ? (place.opening_hours.open_now ? 'Open' : 'Closed') : '-';
+        const row = formatRow(
+            [place.name, place.vicinity, place.rating ?? '-', isOpen],
+            columnWidths
+        );
+        console.log(row);
+    });
 }

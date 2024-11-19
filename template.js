@@ -128,6 +128,61 @@ async function sendWebsiteButton(chatId) {
 
 sendWebsiteButton(chatId);
 
+async function findPlaces(latitude, longitude, radius, placeType, requiredTable) {
+    const placesUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json';
+
+    try {
+        console.log('--------> Тип місць для пошуку:', placeType);
+
+        const response = await axios.get(placesUrl, {
+            params: {
+                location: `${latitude},${longitude}`,
+                radius: radius,
+                type: placeType,
+                key: GOOGLE_API_KEY,
+            },
+        });
+
+        // console.log('===========================> response data', response.data);
+
+        let responseStatus = response.data.status;
+        console.log('========> RESPONSE STATUS:', responseStatus);
+
+        if (responseStatus === 'OK') {
+            const places = response.data.results;
+
+            if (!requiredTable) {
+                console.log(`--------> findPlaces() Invalid datatable type -> ${requiredTable}`);
+                return;
+            }
+
+            console.log(`\nFound ${placeType}s:`);
+            displayPlacesTable(places);
+            // console.log(`Name\t\t\t\tAddress\t\t\t\tRating\t\t\t\tStatus`);
+            // places.forEach((place) => {
+            //     const isOpen = place.opening_hours ? place.opening_hours.open_now ?? '-' : '-';
+            //     console.log(`${place.name}\t\t\t\t${place.vicinity}\t\t\t\t${place.rating}\t\t\t\t${isOpen}`);
+            // });
+
+            console.log('\n-------> потрібна таблиця бд:', requiredTable);
+
+            await savePlacesToDB(responseStatus, places, requiredTable);
+        }
+        else if (responseStatus === 'ZERO_RESULTS') {
+            const places = [];
+            console.error(`--------> No places found in the specified search area (ZERO_RESULTS)`);
+            await savePlacesToDB(responseStatus, places, requiredTable);
+            return;
+        }
+        else {
+            console.error(`-------> findPlaces() ${placeType} search error: `, response.data.status);
+        }
+    }
+    catch (error) {
+        console.error('-------> findPlaces() Places API Error: ', error.message);
+    }
+}
+
 /* // список кафе в кнопках
     const sendCafeList = async (chatId, location, range, category) => {
     try {
