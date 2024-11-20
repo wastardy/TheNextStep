@@ -16,8 +16,8 @@ async function sendWebsiteButton(bot, chatId, requiredTable) {
             reply_markup: {
                 inline_keyboard: [
                     [
-                        { 
-                            text: 'Open the web page🎴', 
+                        {  
+                            text: '🌟 Open the web page', 
                             url: `https://flariii.github.io/TheNextStep_website/?type=${requiredTable}` 
                         }
                     ]
