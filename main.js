@@ -30,6 +30,7 @@ const bot = new telegramAPI(token, { polling: true });
 
 const userSteps = {};
 const defaultRange = 1000; 
+const processedCallbacks = new Set();
 
 const categories = {
     'Cafe': 'cafe', 
@@ -50,6 +51,13 @@ let slectedCategoryDB = '';
 let dbModel;
 
 const main = () => {
+    bot.getMe().then((info) => {
+        console.log(`Bot started! Username: ${info.username}`);
+    })
+    .catch((error) => {
+        console.error('Telegram API connection error:', error.message);
+    });
+
     bot.setMyCommands([
         { command: `/start`, description: 'start chat with the bot' },
     ]);
@@ -184,8 +192,8 @@ const main = () => {
 
                 await bot.sendMessage(
                     chatId, 
-                    `Now enter the <b>search range</b> <u>between 500 and 5000 meters</u>` +
-                    `\n(Default is ${defaultRange} meters)`, 
+                    `Now enter the <b>search range</b> <u>up to 5000 meters</u>` +
+                    `\n\n(Default is ${defaultRange} meters)`, 
                     { parse_mode: 'HTML' }
                 );
             }
@@ -239,6 +247,21 @@ const main = () => {
     });
 
     bot.on('callback_query', async (callbackQuery) => {
+        if (processedCallbacks.has(callbackQuery.id)) {
+            return; // request has already been processed
+        }
+
+        processedCallbacks.add(callbackQuery.id); // save callback id
+
+        setTimeout(() => processedCallbacks.delete(callbackQuery.id), 60000); // 
+
+        try {
+            await bot.answerCallbackQuery(callbackQuery.id);
+        } catch (error) {
+            console.error('Помилка при answerCallbackQuery:', error);
+            return;
+        }
+
         const callbackData = callbackQuery.data;
         const chatId = callbackQuery.message.chat.id;
         const messageId = callbackQuery.message.message_id;
@@ -274,8 +297,8 @@ main();
 async function handleEnterRangeAgain(chatId) {
     await bot.sendMessage(
         chatId,
-        `Please enter the <b>search range</b> <u>between 500 and 5000 meters</u>` +
-        `\n(Default is ${defaultRange} meters)`, 
+        `Please enter the <b>search range</b> <u>up to 5000 meters</u>` +
+        `\n\n(Default is ${defaultRange} meters)`, 
         { parse_mode: 'HTML' }
     );
 }
@@ -437,8 +460,9 @@ async function savePlacesToDB(responseStatus, places, requiredTable) {
 
             placeDocs.sort((a, b) => b.rating - a.rating);
 
-            // for (const place of placeDocs) {
-            //     console.log(`Name: ${place.name} - rating: ${place.rating}`);
+            // console.log(`\nSorted ${requiredTable}s:`);
+            // for (let i = 0; i < placeDocs.length; i++) {
+            //     console.log(`${i + 1} - ${placeDocs[i].name} - rating: ${placeDocs[i].rating}`);
             // }
 
             console.log('-------> savePlacesToDB() Записую дані в ', requiredTable);
@@ -488,7 +512,7 @@ async function getPlaceById(placeId, requiredTable) {
 
 async function sendPlaceInfo(place, chatId) {
     
-    let isOpen = place.is_open === true ? 'open now! ✅' : '-';
+    let isOpen = place.is_open === true ? 'open now! ✅' : 'this place keeps us guessing.. 🤔';
 
     const message = `<b>${place.name}</b>` + 
                     `\n\n<b>Address:</b> ${place.address}📍` + 

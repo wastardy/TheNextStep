@@ -40,7 +40,7 @@ async function isValidStreetInput(city, street) {
 
 async function isValidRangeInput(range) {
     const rangePattern = /^[0-9]+$/;
-    return rangePattern.test(range) && range >= 500 && range <= 5000; 
+    return rangePattern.test(range) && range >= 0 && range <= 5000; 
 }
 
 module.exports = {
